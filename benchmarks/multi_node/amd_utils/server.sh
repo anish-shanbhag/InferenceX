@@ -73,7 +73,7 @@ fi
 # Formula evaluation (e.g. "SGLANG_MORI_NUM_MAX_DISPATCH_TOKENS_PER_RANK * TP * xP")
 # is done here in Python to avoid bash glob-expanding the * characters.
 eval "$(python3 -c "
-import yaml, sys, os
+import yaml, sys, os, shlex
 
 config_path = '${MODELS_YAML}'
 model_name = '${MODEL_NAME}'
@@ -110,6 +110,20 @@ def parse_range(cuda_range, default_start, default_end):
         s, e = str(cuda_range).split('-')
         return s, e
     return str(default_start), str(default_end)
+
+def is_env_key(key):
+    return key and (key[0].isalpha() or key[0] == '_') and all(
+        ch.isalnum() or ch == '_' for ch in key
+    )
+
+# Export model-specific env before building the server command. Values are
+# quoted for shell eval; keys are restricted to normal environment variable
+# names to keep models.yaml data-only.
+for key, value in m.get('env', {}).items():
+    if not is_env_key(key):
+        print(f'echo \"ERROR: Invalid env key in models.yaml: {key}\" >&2; exit 1')
+        sys.exit(0)
+    print(f'export {key}={shlex.quote(str(value))}')
 
 # Output shell variables
 print(f'MODEL_BASE_FLAGS=\"{m.get(\"base_flags\", \"\")}\"')
