@@ -30,7 +30,6 @@ fi
 export PYTHONNOUSERSITE=1
 export SAFETENSORS_FAST_GPU=1
 export VLLM_USE_DEEP_GEMM=0
-export VLLM_MOE_USE_DEEP_GEMM=0
 export VLLM_BLOCKSCALE_FP8_GEMM_FLASHINFER=0
 
 COMPILATION_CONFIG=${COMPILATION_CONFIG:-'{"mode":3,"cudagraph_mode":"PIECEWISE","pass_config":{"fuse_minimax_qk_norm":true}}'}
