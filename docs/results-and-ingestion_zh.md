@@ -14,6 +14,7 @@
 | --- | --- |
 | [`benchmark-tmpl.yml`](../.github/workflows/benchmark-tmpl.yml)、[`benchmark-multinode-tmpl.yml`](../.github/workflows/benchmark-multinode-tmpl.yml) | 吞吐量、评测和 AgentX 工件的单配置名称、文件及上传规则 |
 | [`utils/process_result.py`](../utils/process_result.py) | 固定序列吞吐量聚合架构及派生的每 GPU 指标 |
+| [`infx/results/contracts.py`](../infx/results/contracts.py)、[`inferencex-exchange-contract-v1.json`](../schemas/inferencex-exchange-contract-v1.json) | 规范身份、source lock、结果记录以及任务/运行清单 |
 | [`utils/collect_results.py`](../utils/collect_results.py)、[`collect-results.yml`](../.github/workflows/collect-results.yml) | 将基准结果递归收集为 `agg_<prefix>.json` 和 `results_<prefix>` |
 | [`utils/collect_eval_results.py`](../utils/collect_eval_results.py)、[`collect-evals.yml`](../.github/workflows/collect-evals.yml) | 评测发现、指标提取、批量并发选择及 `eval_results_<prefix>` |
 | [`process_agentic_result.py`](../utils/agentic/aggregation/process_agentic_result.py)、[`request_metrics.py`](../utils/agentic/aggregation/request_metrics.py) | AgentX 聚合架构、原始记录过滤、请求计数和派生指标 |
@@ -77,7 +78,44 @@ file:     agg_bmk.json
 shape:    array of benchmark row objects
 ```
 
-收集器不验证记录、不排序，也不去重。成功解析 JSON 是它唯一的内容检查。应把 `results_bmk` 视为传输聚合，而不是所有记录均可用的证明。
+为兼容 InferenceX-app，旧版 `agg_bmk.json` 数组保持不变。同一工件现在还包含：
+
+```text
+inferencex-result-set.json         已验证的 inferencex.result/v1 记录
+inferencex-collection-report.json 每个输入的路径、摘要、类型和验证结果
+```
+
+格式错误的 JSON 和无效的版本化文档不会静默消失：报告会保留其输入路径、
+字节摘要及验证错误。收集器不会把无效契约加入结果集，也不会重新解释或去重
+旧版记录。
+
+### 版本化结果与清单生命周期
+
+[`schemas/inferencex-exchange-contract-v1.json`](../schemas/inferencex-exchange-contract-v1.json)
+定义 `inferencex.result-record`、`inferencex.result-set`、
+`inferencex.job-manifest` 和 `inferencex.run-manifest`。每个基准任务会在启动
+runner 前上传 planned 清单工件，并在 `always()` 步骤中上传名称不同的 final
+清单工件。由于 GitHub Actions 工件不可变，这两个名称有意分开。即使启动失败，
+planned 清单仍能证明计划内容；final 步骤能运行时，会记录任务结论以及零条或
+多条结果记录。多并发任务为每条结果发出独立清单和 `result_ordinal`。
+
+`plan_id`/`plan_fingerprint` 表示运行前意图。只有结果写入器把计划与 source
+lock 和精确并发绑定后，任务才会声明 `point_id` 或 `point_fingerprint`。
+`matrix_fingerprint` 独立进行规范化计算；旧的 `recipe_fingerprint` 仅作为
+兼容值保留在 `extensions.legacy_recipe_fingerprint` 中。
+
+运行级工件使用固定名称 `inferencex-run-manifest`，保留完整展开矩阵，并区分
+source 与 merge 运行身份。在后续聚合阶段尚未关联各任务清单前，每个点的结果
+明确标记为 `unknown`，不会误报为 queued 或 success。复用运行采用 source
+运行已记录的 ID、attempt、head SHA 和 URL；缺少的 source 专属任务或事件字段
+不会从 merge 运行复制。
+
+如果缺少不可变镜像/检查点解析或有效启动回执，新记录会明确标记为
+`reproducibility.status: partial`。启动器可提供 `INFERENCEX_EXECUTION_RECEIPT`
+或 `INFERENCEX_EXECUTION_RECEIPT_PATH`；写入器会在计算摘要或发布前递归清理
+环境变量名、参数、配置键、请求头及带凭据 URL 中的敏感值。本仓库不会为旧工件
+伪造这些事实。完整 API 存储与历史回填仍属于 InferenceX-app 的后续工作；在其
+部署采用版本化结果集之前，旧版数组仍是受支持的交接格式。
 
 ### 吞吐量记录架构
 

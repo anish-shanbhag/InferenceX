@@ -992,12 +992,21 @@ jobs:
         if: ${{ always() && needs.setup.result == 'success' }}
         runs-on: ubuntu-latest
         steps:
+            - name: Checkout code
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  fetch-depth: 0
+
             - name: Extract and save changelog metadata
               env:
                   SWEEP_MATRIX: ${{ needs.setup.outputs.search-space-config }}
                   SWEEP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
                   SWEEP_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
                   FULL_SWEEP: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'full-sweep-enabled') && !contains(github.event.pull_request.labels.*.name, 'evals-only') && !contains(github.event.pull_request.labels.*.name, 'agentx-fast') && needs.setup.outputs.reuse-enabled != 'true' }}
+                  INFERENCEX_REUSE_SOURCE_RUN_ID: ${{ needs.setup.outputs.reuse-enabled == 'true' && needs.setup.outputs.reuse-source-run-id || '' }}
+                  INFERENCEX_REUSE_SOURCE_RUN_ATTEMPT: ${{ needs.setup.outputs.reuse-enabled == 'true' && needs.setup.outputs.reuse-source-run-attempt || '' }}
+                  INFERENCEX_REUSE_SOURCE_RUN_URL: ${{ needs.setup.outputs.reuse-enabled == 'true' && needs.setup.outputs.reuse-source-run-url || '' }}
+                  INFERENCEX_REUSE_SOURCE_HEAD_SHA: ${{ needs.setup.outputs.reuse-enabled == 'true' && needs.setup.outputs.reuse-source-head-sha || '' }}
               run: |
                   python3 - <<'PY'
                   import json, os
@@ -1014,6 +1023,8 @@ jobs:
                       'matrix': matrix,
                   }))
                   PY
+                  python3 utils/write_exchange_contract.py run \
+                    --matrix-json "$SWEEP_MATRIX" --output inferencex-run-manifest.json
 
             - name: Upload changelog artifact
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1027,6 +1038,13 @@ jobs:
               with:
                   name: klaud-sweep-manifest
                   path: sweep_manifest.json
+                  if-no-files-found: error
+
+            - name: Upload versioned run manifest
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: inferencex-run-manifest
+                  path: inferencex-run-manifest.json
                   if-no-files-found: error
 
     calc-success-rate:

@@ -14,6 +14,7 @@ Use this page to identify benchmark artifacts, inspect their contracts, and deci
 | --- | --- |
 | [`benchmark-tmpl.yml`](../.github/workflows/benchmark-tmpl.yml), [`benchmark-multinode-tmpl.yml`](../.github/workflows/benchmark-multinode-tmpl.yml) | Per-config names, files, and upload rules for throughput, eval, and AgentX artifacts |
 | [`utils/process_result.py`](../utils/process_result.py) | Fixed-sequence throughput aggregate schema and derived per-GPU metrics |
+| [`infx/results/contracts.py`](../infx/results/contracts.py), [`inferencex-exchange-contract-v1.json`](../schemas/inferencex-exchange-contract-v1.json) | Canonical identities, source locks, result records, and job/run manifests |
 | [`utils/collect_results.py`](../utils/collect_results.py), [`collect-results.yml`](../.github/workflows/collect-results.yml) | Recursive benchmark collection into `agg_<prefix>.json` and `results_<prefix>` |
 | [`utils/collect_eval_results.py`](../utils/collect_eval_results.py), [`collect-evals.yml`](../.github/workflows/collect-evals.yml) | Eval discovery, metric extraction, batched-concurrency selection, and `eval_results_<prefix>` |
 | [`process_agentic_result.py`](../utils/agentic/aggregation/process_agentic_result.py), [`request_metrics.py`](../utils/agentic/aggregation/request_metrics.py) | AgentX aggregate schema, raw-record filtering, request accounting, and derived metrics |
@@ -77,7 +78,52 @@ file:     agg_bmk.json
 shape:    array of benchmark row objects
 ```
 
-The collector does not validate rows, sort them, or deduplicate them. A successful JSON parse is its only content check. Treat `results_bmk` as a transport aggregate, not as proof that every row is usable.
+The legacy `agg_bmk.json` array remains unchanged for InferenceX-app compatibility.
+The same artifact now also contains:
+
+```text
+inferencex-result-set.json         validated inferencex.result/v1 records
+inferencex-collection-report.json path, digest, type, and validation outcome for every input
+```
+
+Malformed JSON and invalid versioned documents do not disappear: the report records
+their input path, byte digest, and validation error. The collector does not add an
+invalid contract document to the result set, and it does not reinterpret or deduplicate
+legacy rows.
+
+### Versioned result and manifest lifecycle
+
+The schema in [`schemas/inferencex-exchange-contract-v1.json`](../schemas/inferencex-exchange-contract-v1.json)
+defines `inferencex.result-record`, `inferencex.result-set`,
+`inferencex.job-manifest`, and `inferencex.run-manifest`. Each benchmark job uploads
+a pre-launch planned-manifest artifact before starting the runner and a separately
+named final-manifest artifact in an `always()` step. The names are intentionally
+different because GitHub Actions artifacts are immutable. If launch fails, the planned
+manifest still proves what was scheduled; when finalization runs, it records the job
+conclusion and zero or more result records. Multi-concurrency jobs emit one manifest
+and one `result_ordinal` per result.
+
+`plan_id`/`plan_fingerprint` identify pre-runtime intent. A job does not claim a
+`point_id` or `point_fingerprint` until the result writer binds the plan to its source
+lock and exact concurrency. `matrix_fingerprint` is independently canonicalized;
+the older `recipe_fingerprint` is retained only as a compatibility value under
+`extensions.legacy_recipe_fingerprint`.
+
+The run-level artifact has the fixed name `inferencex-run-manifest`. It preserves the
+expanded matrix and distinct source/merge run identities. Until per-job manifests are
+joined by a later aggregation phase, its point outcomes are explicitly `unknown`, not
+reported as queued or successful. Reused runs use the source run's recorded ID,
+attempt, head SHA, and URL; missing source-only job/event fields are not copied from
+the merge run.
+
+New records are deliberately marked `reproducibility.status: partial` while immutable
+image/checkpoint resolution or an effective launch receipt is absent. Launchers may
+provide `INFERENCEX_EXECUTION_RECEIPT` or `INFERENCEX_EXECUTION_RECEIPT_PATH`; the
+writer recursively redacts credential-shaped environment names, arguments, config
+keys, headers, and credential-bearing URLs before hashing or publishing the receipt.
+The repository does not fabricate those facts for older artifacts. Full API storage
+and historical backfill remain InferenceX-app work; the legacy array is the supported
+handoff until that deployment adopts the versioned result set.
 
 ### Throughput row schema
 

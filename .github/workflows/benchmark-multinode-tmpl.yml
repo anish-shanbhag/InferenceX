@@ -234,6 +234,7 @@ on:
         type: string
 
 env:
+  INFERENCEX_MATRIX_JSON: ${{ toJson(inputs) }}
   RANDOM_RANGE_RATIO: 0.8
   # Day-zero models resolved via hf: ids download from the Hub inside the
   # slurm job (srtctl pre-download + dynamo hub fetch). Anonymous requests
@@ -407,7 +408,22 @@ jobs:
           clean: true
           submodules: true
 
+      - name: Write planned benchmark manifests
+        id: plan-contract
+        run: >-
+          python3 utils/write_exchange_contract.py job --phase planned
+          --matrix-json "$INFERENCEX_MATRIX_JSON" --output-dir inferencex-contract/planned
+          --github-env "$GITHUB_ENV" --github-output "$GITHUB_OUTPUT"
+
+      - name: Upload planned benchmark manifests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: inferencex-planned-manifests-${{ steps.plan-contract.outputs.group-id }}
+          path: inferencex-contract/planned/
+          if-no-files-found: error
+
       - name: Launch multi-node job script
+        id: benchmark-launch
         env:
           RUNNER_NAME: ${{ runner.name }}
           RUNNER_TYPE: ${{ inputs.runner }}
@@ -585,6 +601,34 @@ jobs:
           rm -f -- ./*_artifacts.tar.gz || true
           rm -f sample*.jsonl || true
           rm -f agent_preds.json predictions.jsonl swebench_report_*.json *.traj* || true
+
+      - name: Write final benchmark manifests and result records
+        id: final-contract
+        if: always()
+        env:
+          JOB_CONCLUSION: ${{ job.status }}
+        run: |
+          result_args=()
+          shopt -s nullglob
+          if [[ "${{ inputs.eval-only }}" != "true" && "${{ inputs.scenario-type }}" == "agentic-coding" ]]; then
+            for result in "${RESULT_FILENAME}"_conc*.json; do result_args+=(--result "$result"); done
+          elif [[ "${{ inputs.eval-only }}" != "true" ]]; then
+            for result in "agg_${RESULT_FILENAME}"_*.json; do result_args+=(--result "$result"); done
+          fi
+          shopt -u nullglob
+          python3 utils/write_exchange_contract.py job --phase final \
+            --conclusion "$JOB_CONCLUSION" --matrix-json "$INFERENCEX_MATRIX_JSON" \
+            --output-dir inferencex-contract/final --github-env "$GITHUB_ENV" \
+            --github-output "$GITHUB_OUTPUT" \
+            "${result_args[@]}"
+
+      - name: Upload final benchmark manifests and result records
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: inferencex-final-manifests-${{ steps.final-contract.outputs.group-id }}
+          path: inferencex-contract/final/
+          if-no-files-found: error
 
       - name: Slurm cleanup (post-run)
         if: always()

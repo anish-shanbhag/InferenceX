@@ -170,6 +170,7 @@ on:
         type: string
         default: ""
 env:
+  INFERENCEX_MATRIX_JSON: ${{ toJson(inputs) }}
   RANDOM_RANGE_RATIO: 0.8
   HF_TOKEN: ${{ secrets.INFERENCEX_OFFICIAL_RO_HF_TOKEN }}
   HF_HUB_CACHE: '/mnt/hf_hub_cache/'
@@ -339,7 +340,22 @@ jobs:
           clean: true
           submodules: true
 
+      - name: Write planned benchmark manifests
+        id: plan-contract
+        run: >-
+          python3 utils/write_exchange_contract.py job --phase planned
+          --matrix-json "$INFERENCEX_MATRIX_JSON" --output-dir inferencex-contract/planned
+          --github-env "$GITHUB_ENV" --github-output "$GITHUB_OUTPUT"
+
+      - name: Upload planned benchmark manifests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: inferencex-planned-manifests-${{ steps.plan-contract.outputs.group-id }}
+          path: inferencex-contract/planned/
+          if-no-files-found: error
+
       - name: Launch job script
+        id: benchmark-launch
         env:
           RUNNER_NAME: ${{ runner.name }}
           RUNNER_TYPE: ${{ inputs.runner }}
@@ -498,6 +514,32 @@ jobs:
           rm -f sample*.jsonl || true
           rm -f -- ./*_artifacts.tar.gz || true
           rm -f agent_preds.json predictions.jsonl swebench_report_*.json *.traj* || true
+
+      - name: Write final benchmark manifests and result records
+        id: final-contract
+        if: always()
+        env:
+          JOB_CONCLUSION: ${{ job.status }}
+        run: |
+          result_args=()
+          if [[ "${{ inputs.eval-only }}" != "true" && "${{ inputs.scenario-type }}" == "agentic-coding" && -f "${RESULT_FILENAME}.json" ]]; then
+            result_args+=(--result "${RESULT_FILENAME}.json")
+          elif [[ "${{ inputs.eval-only }}" != "true" && -f "agg_${RESULT_FILENAME}.json" ]]; then
+            result_args+=(--result "agg_${RESULT_FILENAME}.json")
+          fi
+          python3 utils/write_exchange_contract.py job --phase final \
+            --conclusion "$JOB_CONCLUSION" --matrix-json "$INFERENCEX_MATRIX_JSON" \
+            --output-dir inferencex-contract/final --github-env "$GITHUB_ENV" \
+            --github-output "$GITHUB_OUTPUT" \
+            "${result_args[@]}"
+
+      - name: Upload final benchmark manifests and result records
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: inferencex-final-manifests-${{ steps.final-contract.outputs.group-id }}
+          path: inferencex-contract/final/
+          if-no-files-found: error
           
       - name: Resource cleanup (post-run)
         if: always()
