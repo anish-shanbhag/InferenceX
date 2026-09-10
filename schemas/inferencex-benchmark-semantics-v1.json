@@ -1,0 +1,857 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/main/schemas/inferencex-benchmark-semantics-v1.json",
+  "title": "InferenceX effective benchmark semantics contract",
+  "description": "Resolved AgentX request behavior, benchmark protocol, speculative-decoding policy, and golden acceptance curves.",
+  "oneOf": [
+    { "$ref": "#/$defs/behaviorContractDocument" },
+    { "$ref": "#/$defs/goldenAcceptanceCurveDocument" }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "jsonScalar": {
+      "type": ["string", "number", "integer", "boolean", "null"]
+    },
+    "sourcePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "path", "blob_object_id"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "commit": { "$ref": "#/$defs/gitObjectId" },
+        "path": { "type": "string", "minLength": 1 },
+        "blob_object_id": { "$ref": "#/$defs/gitObjectId" }
+      }
+    },
+    "artifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url", "digest"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "type": ["string", "null"], "format": "uri" },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "checkpointIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "revision", "resolved_commit", "digest"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "revision": { "type": ["string", "null"], "minLength": 1 },
+        "resolved_commit": { "type": ["string", "null"], "minLength": 1 },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "samplingParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "temperature",
+        "top_p",
+        "top_k",
+        "min_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "repetition_penalty",
+        "seed",
+        "max_output_tokens",
+        "ignore_eos",
+        "stop"
+      ],
+      "properties": {
+        "temperature": { "type": ["number", "null"], "minimum": 0 },
+        "top_p": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "top_k": { "type": ["integer", "null"], "minimum": -1 },
+        "min_p": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "presence_penalty": { "type": ["number", "null"] },
+        "frequency_penalty": { "type": ["number", "null"] },
+        "repetition_penalty": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "seed": { "type": ["integer", "null"] },
+        "max_output_tokens": { "type": ["integer", "null"], "minimum": 1 },
+        "ignore_eos": { "type": ["boolean", "null"] },
+        "stop": {
+          "oneOf": [
+            { "type": "array", "items": { "type": ["string", "integer"] } },
+            { "type": "null" }
+          ]
+        },
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "templateIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "repository", "revision", "path", "digest"],
+      "properties": {
+        "kind": { "enum": ["tokenizer_default", "file", "inline", "none", "unknown"] },
+        "repository": { "type": ["string", "null"], "minLength": 1 },
+        "revision": { "type": ["string", "null"], "minLength": 1 },
+        "path": { "type": ["string", "null"], "minLength": 1 },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "chatTemplateContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "use_chat_template",
+        "tokenization_side",
+        "template",
+        "client_kwargs",
+        "server_default_kwargs",
+        "add_generation_prompt"
+      ],
+      "properties": {
+        "status": { "enum": ["resolved", "unknown"] },
+        "use_chat_template": { "type": ["boolean", "null"] },
+        "tokenization_side": { "enum": ["client", "server", "both", "unknown"] },
+        "template": { "$ref": "#/$defs/templateIdentity" },
+        "client_kwargs": { "type": "object", "additionalProperties": true },
+        "server_default_kwargs": { "type": "object", "additionalProperties": true },
+        "add_generation_prompt": { "type": ["boolean", "null"] }
+      }
+    },
+    "thinkingContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "resolution", "client_encoding", "server_encoding"],
+      "properties": {
+        "state": { "enum": ["enabled", "disabled", "not_applicable", "unknown"] },
+        "resolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "evidence"],
+          "properties": {
+            "source": {
+              "enum": [
+                "explicit_matrix",
+                "explicit_behavior_profile",
+                "explicit_request",
+                "locked_revision_default",
+                "server_default",
+                "not_applicable",
+                "unknown"
+              ]
+            },
+            "evidence": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/sourcePointer" }
+            }
+          }
+        },
+        "client_encoding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["surface", "json_pointer", "value"],
+          "properties": {
+            "surface": { "enum": ["extra_body", "chat_template_kwargs", "none", "unknown"] },
+            "json_pointer": { "type": ["string", "null"], "pattern": "^/" },
+            "value": { "$ref": "#/$defs/jsonScalar" }
+          }
+        },
+        "server_encoding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["surface", "field", "value"],
+          "properties": {
+            "surface": { "enum": ["default_chat_template_kwargs", "server_flag", "environment", "none", "unknown"] },
+            "field": { "type": ["string", "null"], "minLength": 1 },
+            "value": { "$ref": "#/$defs/jsonScalar" }
+          }
+        }
+      }
+    },
+    "requestHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value_source", "semantic_role"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "value_source": { "type": "string", "minLength": 1 },
+        "semantic_role": { "enum": ["conversation_affinity", "routing", "content", "other"] }
+      }
+    },
+    "requestContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api",
+        "endpoint",
+        "stream",
+        "model_field",
+        "extra_body",
+        "thinking",
+        "chat_template",
+        "sampling",
+        "headers",
+        "conversation_routing",
+        "tool_choice",
+        "response_interpretation",
+        "token_counting"
+      ],
+      "properties": {
+        "api": { "enum": ["openai.chat.completions", "openai.responses", "custom"] },
+        "endpoint": { "type": "string", "minLength": 1 },
+        "stream": { "type": "boolean" },
+        "model_field": { "type": "string", "minLength": 1 },
+        "extra_body": { "type": "object", "additionalProperties": true },
+        "thinking": { "$ref": "#/$defs/thinkingContract" },
+        "chat_template": { "$ref": "#/$defs/chatTemplateContract" },
+        "sampling": { "$ref": "#/$defs/samplingParameters" },
+        "headers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/requestHeader" }
+        },
+        "conversation_routing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["affinity_required", "mechanism", "header_name", "session_timeout_seconds"],
+          "properties": {
+            "affinity_required": { "type": ["boolean", "null"] },
+            "mechanism": { "enum": ["correlation_id_header", "aiperf_legacy", "router_native", "none", "unknown"] },
+            "header_name": { "type": ["string", "null"], "minLength": 1 },
+            "session_timeout_seconds": { "type": ["number", "null"], "minimum": 0 }
+          }
+        },
+        "tool_choice": { "type": ["string", "object", "null"] },
+        "response_interpretation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reasoning_parser", "tool_call_parser", "automatic_tool_choice"],
+          "properties": {
+            "reasoning_parser": { "type": ["string", "null"], "minLength": 1 },
+            "tool_call_parser": { "type": ["string", "null"], "minLength": 1 },
+            "automatic_tool_choice": { "type": ["boolean", "null"] }
+          }
+        },
+        "token_counting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tokenizer", "count_prompt", "count_completion", "include_reasoning"],
+          "properties": {
+            "tokenizer": { "$ref": "#/$defs/checkpointIdentity" },
+            "count_prompt": { "type": "boolean" },
+            "count_completion": { "type": "boolean" },
+            "include_reasoning": { "type": "boolean" }
+          }
+        },
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "traceProtocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "loader",
+        "corpus",
+        "repository",
+        "revision",
+        "resolved_commit",
+        "split",
+        "digest",
+        "replay_mode",
+        "timing_mode",
+        "cache_bust_policy",
+        "random_seed",
+        "idle_gap_cap_seconds"
+      ],
+      "properties": {
+        "loader": { "type": "string", "minLength": 1 },
+        "corpus": { "type": "string", "minLength": 1 },
+        "repository": { "type": ["string", "null"], "minLength": 1 },
+        "revision": { "type": ["string", "null"], "minLength": 1 },
+        "resolved_commit": { "type": ["string", "null"], "minLength": 1 },
+        "split": { "type": ["string", "null"], "minLength": 1 },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "replay_mode": { "enum": ["prerecorded", "live", "hybrid", "unknown"] },
+        "timing_mode": { "type": "string", "minLength": 1 },
+        "cache_bust_policy": { "type": "string", "minLength": 1 },
+        "random_seed": { "type": ["integer", "null"] },
+        "idle_gap_cap_seconds": { "type": ["number", "null"], "minimum": 0 },
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "warmupProtocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests_per_lane", "duration_seconds", "lane_priming", "grace_period_seconds"],
+      "properties": {
+        "requests_per_lane": { "$ref": "#/$defs/nonNegativeInteger" },
+        "duration_seconds": { "type": ["number", "null"], "minimum": 0 },
+        "lane_priming": { "type": "string", "minLength": 1 },
+        "grace_period_seconds": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "validityRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "operator", "threshold", "unit"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "operator": { "enum": ["lt", "lte", "gt", "gte", "eq", "present"] },
+        "threshold": { "$ref": "#/$defs/jsonScalar" },
+        "unit": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "benchmarkProtocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "benchmark_id",
+        "mode",
+        "client_implementation",
+        "duration_seconds",
+        "warmup",
+        "trace",
+        "failure_policy",
+        "validity_rules",
+        "unsafe_mode"
+      ],
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 1 },
+        "benchmark_id": { "type": "string", "minLength": 1 },
+        "mode": { "enum": ["canonical", "fast", "diagnostic"] },
+        "client_implementation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "repository", "commit", "entrypoint", "package_versions"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "repository": { "type": "string", "minLength": 1 },
+            "commit": { "$ref": "#/$defs/gitObjectId" },
+            "entrypoint": { "type": "string", "minLength": 1 },
+            "package_versions": { "type": "object", "additionalProperties": { "type": "string" } }
+          }
+        },
+        "duration_seconds": { "$ref": "#/$defs/positiveInteger" },
+        "warmup": { "$ref": "#/$defs/warmupProtocol" },
+        "trace": { "$ref": "#/$defs/traceProtocol" },
+        "failure_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["failed_request_fraction_max", "early_abort_fraction", "transport_timeout_seconds"],
+          "properties": {
+            "failed_request_fraction_max": { "type": "number", "minimum": 0, "maximum": 1 },
+            "early_abort_fraction": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "transport_timeout_seconds": { "type": ["number", "null"], "minimum": 0 }
+          }
+        },
+        "validity_rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/validityRule" }
+        },
+        "unsafe_mode": { "type": "boolean" },
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "draftConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "checkpoint",
+        "variant",
+        "num_speculative_tokens",
+        "num_speculative_steps",
+        "top_k"
+      ],
+      "properties": {
+        "kind": { "enum": ["none", "embedded_heads", "external_checkpoint", "unknown"] },
+        "checkpoint": {
+          "oneOf": [
+            { "$ref": "#/$defs/checkpointIdentity" },
+            { "type": "null" }
+          ]
+        },
+        "variant": { "type": ["string", "null"], "minLength": 1 },
+        "num_speculative_tokens": { "type": ["integer", "null"], "minimum": 1 },
+        "num_speculative_steps": { "type": ["integer", "null"], "minimum": 1 },
+        "top_k": { "type": ["integer", "null"], "minimum": 1 },
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "curveSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "curve_id",
+        "curve_digest",
+        "source",
+        "model_key",
+        "thinking_state",
+        "method",
+        "variant",
+        "num_speculative_tokens",
+        "acceptance_length",
+        "statistic",
+        "rounding_decimals"
+      ],
+      "properties": {
+        "curve_id": { "type": "string", "minLength": 1 },
+        "curve_digest": { "$ref": "#/$defs/digest" },
+        "source": { "$ref": "#/$defs/sourcePointer" },
+        "model_key": { "type": "string", "minLength": 1 },
+        "thinking_state": { "enum": ["enabled", "disabled"] },
+        "method": { "enum": ["mtp", "eagle", "eagle3", "draft_model", "dspark", "other"] },
+        "variant": { "type": ["string", "null"], "minLength": 1 },
+        "num_speculative_tokens": { "$ref": "#/$defs/positiveInteger" },
+        "acceptance_length": { "type": "number", "minimum": 1 },
+        "statistic": { "const": "mean_acceptance_length" },
+        "rounding_decimals": { "$ref": "#/$defs/nonNegativeInteger" }
+      }
+    },
+    "acceptanceInjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "framework",
+        "surface",
+        "location",
+        "transform",
+        "encoded_value",
+        "evaluation_scope",
+        "native_value"
+      ],
+      "properties": {
+        "role": { "enum": ["aggregated", "prefill", "decode"] },
+        "framework": { "type": "string", "minLength": 1 },
+        "surface": { "enum": ["environment", "cli_argument", "config_field"] },
+        "location": { "type": "string", "minLength": 1 },
+        "transform": { "enum": ["identity", "minus_one", "acceptance_rate", "position_schedule", "other"] },
+        "encoded_value": { "$ref": "#/$defs/jsonScalar" },
+        "evaluation_scope": { "enum": ["throughput", "accuracy", "all"] },
+        "native_value": { "$ref": "#/$defs/jsonScalar" }
+      }
+    },
+    "runtimeVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "observed_acceptance_length", "tolerance", "evidence"],
+      "properties": {
+        "status": { "enum": ["verified", "failed", "not_verified", "unknown"] },
+        "observed_acceptance_length": { "type": ["number", "null"], "minimum": 0 },
+        "tolerance": { "type": ["number", "null"], "minimum": 0 },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactPointer" }
+        }
+      }
+    },
+    "acceptanceContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "curve_selection", "injections", "runtime_verification"],
+      "properties": {
+        "mode": { "enum": ["synthetic_golden", "real", "disabled", "unknown"] },
+        "curve_selection": {
+          "oneOf": [
+            { "$ref": "#/$defs/curveSelection" },
+            { "type": "null" }
+          ]
+        },
+        "injections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/acceptanceInjection" }
+        },
+        "runtime_verification": { "$ref": "#/$defs/runtimeVerification" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "mode": { "const": "synthetic_golden" } },
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": {
+              "curve_selection": { "$ref": "#/$defs/curveSelection" },
+              "injections": { "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "mode": { "enum": ["real", "disabled"] } },
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": {
+              "curve_selection": { "type": "null" },
+              "injections": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    },
+    "roleSpeculativeConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "enabled", "method", "draft", "acceptance"],
+      "properties": {
+        "role": { "enum": ["aggregated", "prefill", "decode"] },
+        "enabled": { "type": "boolean" },
+        "method": { "enum": ["none", "mtp", "eagle", "eagle3", "draft_model", "dspark", "other", "unknown"] },
+        "draft": { "$ref": "#/$defs/draftConfiguration" },
+        "acceptance": { "$ref": "#/$defs/acceptanceContract" },
+        "effective_server_config_digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "enabled": { "const": false } },
+            "required": ["enabled"]
+          },
+          "then": {
+            "properties": {
+              "method": { "const": "none" },
+              "draft": {
+                "properties": {
+                  "kind": { "const": "none" },
+                  "checkpoint": { "type": "null" },
+                  "num_speculative_tokens": { "type": "null" },
+                  "num_speculative_steps": { "type": "null" }
+                }
+              },
+              "acceptance": {
+                "properties": { "mode": { "const": "disabled" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "speculativeDecodingContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["declared_method", "roles", "consistency_status"],
+      "properties": {
+        "declared_method": { "enum": ["none", "mtp", "eagle", "eagle3", "draft_model", "dspark", "other", "unknown"] },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/roleSpeculativeConfiguration" }
+        },
+        "consistency_status": { "enum": ["consistent", "inconsistent", "unknown"] }
+      }
+    },
+    "behaviorSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inferencex_commit", "sources", "resolution_warnings"],
+      "properties": {
+        "inferencex_commit": { "$ref": "#/$defs/gitObjectId" },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/sourcePointer" }
+        },
+        "resolution_warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "behaviorContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "behavior_schema_version",
+        "contract_id",
+        "contract_digest",
+        "status",
+        "benchmark_protocol",
+        "request",
+        "speculative_decoding",
+        "source",
+        "extensions"
+      ],
+      "properties": {
+        "behavior_schema_version": { "const": "inferencex.behavior/v1" },
+        "contract_id": { "type": ["string", "null"], "minLength": 1 },
+        "contract_digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "status": { "enum": ["resolved", "partial", "unknown"] },
+        "benchmark_protocol": {
+          "oneOf": [
+            { "$ref": "#/$defs/benchmarkProtocol" },
+            { "type": "null" }
+          ]
+        },
+        "request": {
+          "oneOf": [
+            { "$ref": "#/$defs/requestContract" },
+            { "type": "null" }
+          ]
+        },
+        "speculative_decoding": {
+          "oneOf": [
+            { "$ref": "#/$defs/speculativeDecodingContract" },
+            { "type": "null" }
+          ]
+        },
+        "source": {
+          "oneOf": [
+            { "$ref": "#/$defs/behaviorSource" },
+            { "type": "null" }
+          ]
+        },
+        "extensions": { "type": "object", "additionalProperties": true }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "resolved" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "contract_id": { "type": "string", "minLength": 1 },
+              "contract_digest": { "$ref": "#/$defs/digest" },
+              "benchmark_protocol": { "$ref": "#/$defs/benchmarkProtocol" },
+              "request": {
+                "$ref": "#/$defs/requestContract",
+                "properties": {
+                  "thinking": {
+                    "properties": {
+                      "state": { "not": { "const": "unknown" } },
+                      "resolution": {
+                        "properties": { "source": { "not": { "const": "unknown" } } }
+                      }
+                    }
+                  },
+                  "chat_template": {
+                    "properties": { "status": { "const": "resolved" } }
+                  }
+                }
+              },
+              "speculative_decoding": {
+                "$ref": "#/$defs/speculativeDecodingContract",
+                "properties": { "consistency_status": { "const": "consistent" } }
+              },
+              "source": { "$ref": "#/$defs/behaviorSource" }
+            }
+          }
+        }
+      ]
+    },
+    "behaviorContractDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_type", "schema_version", "generated_at", "behavior"],
+      "properties": {
+        "document_type": { "const": "inferencex.behavior-contract" },
+        "schema_version": { "const": "inferencex.behavior/v1" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "behavior": { "$ref": "#/$defs/behaviorContract" }
+      }
+    },
+    "goldenPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["num_speculative_tokens", "acceptance_length", "distribution"],
+      "properties": {
+        "num_speculative_tokens": { "$ref": "#/$defs/positiveInteger" },
+        "acceptance_length": { "type": "number", "minimum": 1 },
+        "distribution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "values", "derivation"],
+          "properties": {
+            "kind": { "enum": ["mean_only", "empirical_pmf", "minimum_variance_pmf", "position_probabilities"] },
+            "values": {
+              "type": "array",
+              "items": { "type": "number", "minimum": 0, "maximum": 1 }
+            },
+            "derivation": { "type": ["string", "null"], "minLength": 1 }
+          }
+        }
+      }
+    },
+    "goldenMode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thinking_state", "sampling", "chat_template", "points"],
+      "properties": {
+        "thinking_state": { "enum": ["enabled", "disabled"] },
+        "sampling": { "$ref": "#/$defs/samplingParameters" },
+        "chat_template": { "$ref": "#/$defs/chatTemplateContract" },
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/goldenPoint" }
+        }
+      }
+    },
+    "goldenCollection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dataset",
+        "category",
+        "prompt_count",
+        "output_length",
+        "formula",
+        "statistic",
+        "rounding_decimals",
+        "framework",
+        "framework_version",
+        "image",
+        "hardware",
+        "collector",
+        "workflow_run_url",
+        "workflow_run_id",
+        "workflow_run_attempt",
+        "artifacts"
+      ],
+      "properties": {
+        "dataset": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "revision", "resolved_commit", "split", "digest"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "revision": { "type": ["string", "null"], "minLength": 1 },
+            "resolved_commit": { "type": ["string", "null"], "minLength": 1 },
+            "split": { "type": "string", "minLength": 1 },
+            "digest": {
+              "oneOf": [
+                { "$ref": "#/$defs/digest" },
+                { "type": "null" }
+              ]
+            }
+          }
+        },
+        "category": { "type": "string", "minLength": 1 },
+        "prompt_count": { "$ref": "#/$defs/positiveInteger" },
+        "output_length": { "$ref": "#/$defs/positiveInteger" },
+        "formula": { "const": "1 + accepted_draft_tokens / verification_steps" },
+        "statistic": { "const": "mean_acceptance_length" },
+        "rounding_decimals": { "$ref": "#/$defs/nonNegativeInteger" },
+        "framework": { "type": "string", "minLength": 1 },
+        "framework_version": { "type": ["string", "null"], "minLength": 1 },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reference", "manifest_digest"],
+          "properties": {
+            "reference": { "type": "string", "minLength": 1 },
+            "manifest_digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" }
+          }
+        },
+        "hardware": { "type": "string", "minLength": 1 },
+        "collector": { "$ref": "#/$defs/sourcePointer" },
+        "workflow_run_url": { "type": "string", "format": "uri" },
+        "workflow_run_id": { "type": "integer", "minimum": 1 },
+        "workflow_run_attempt": { "$ref": "#/$defs/positiveInteger" },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactPointer" }
+        }
+      }
+    },
+    "goldenAcceptanceCurve": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "curve_schema_version",
+        "curve_id",
+        "curve_digest",
+        "status",
+        "model_key",
+        "target_checkpoint",
+        "draft",
+        "method",
+        "variant",
+        "modes",
+        "collection",
+        "source",
+        "validation"
+      ],
+      "properties": {
+        "curve_schema_version": { "const": "inferencex.golden-acceptance/v1" },
+        "curve_id": { "type": "string", "minLength": 1 },
+        "curve_digest": { "$ref": "#/$defs/digest" },
+        "status": { "enum": ["draft", "active", "deprecated"] },
+        "model_key": { "type": "string", "minLength": 1 },
+        "target_checkpoint": { "$ref": "#/$defs/checkpointIdentity" },
+        "draft": { "$ref": "#/$defs/draftConfiguration" },
+        "method": { "enum": ["mtp", "eagle", "eagle3", "draft_model", "dspark", "other"] },
+        "variant": { "type": ["string", "null"], "minLength": 1 },
+        "modes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/goldenMode" }
+        },
+        "collection": { "$ref": "#/$defs/goldenCollection" },
+        "source": { "$ref": "#/$defs/sourcePointer" },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["review_status", "reviewed_by", "reviewed_at", "notes"],
+          "properties": {
+            "review_status": { "enum": ["pending", "approved", "rejected"] },
+            "reviewed_by": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+            "notes": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "goldenAcceptanceCurveDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_type", "schema_version", "generated_at", "curve"],
+      "properties": {
+        "document_type": { "const": "inferencex.golden-acceptance-curve" },
+        "schema_version": { "const": "inferencex.golden-acceptance/v1" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "curve": { "$ref": "#/$defs/goldenAcceptanceCurve" }
+      }
+    }
+  }
+}

@@ -1,0 +1,1259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/main/schemas/inferencex-exchange-contract-v1.json",
+  "title": "InferenceX result and run exchange contract",
+  "description": "Versioned documents emitted by InferenceX jobs, run collection, and the published results API.",
+  "oneOf": [
+    { "$ref": "#/$defs/resultRecordDocument" },
+    { "$ref": "#/$defs/resultSetDocument" },
+    { "$ref": "#/$defs/jobManifestDocument" },
+    { "$ref": "#/$defs/runManifestDocument" }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "positiveNumber": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "positiveNumberOrNull": {
+      "oneOf": [
+        { "$ref": "#/$defs/positiveNumber" },
+        { "type": "null" }
+      ]
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": ["string", "null"], "minLength": 1 },
+        "source_commit": {
+          "oneOf": [
+            { "$ref": "#/$defs/gitObjectId" },
+            { "type": "null" }
+          ]
+        },
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "revision", "resolved_commit", "digest"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "revision": { "type": ["string", "null"], "minLength": 1 },
+        "resolved_commit": { "type": ["string", "null"], "minLength": 1 },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "modelIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_prefix",
+        "display_name",
+        "served_model_name",
+        "checkpoint",
+        "draft_checkpoint"
+      ],
+      "properties": {
+        "model_prefix": { "type": "string", "minLength": 1 },
+        "display_name": { "type": ["string", "null"], "minLength": 1 },
+        "served_model_name": { "type": ["string", "null"], "minLength": 1 },
+        "checkpoint": {
+          "oneOf": [
+            { "$ref": "#/$defs/checkpoint" },
+            { "type": "null" }
+          ]
+        },
+        "draft_checkpoint": {
+          "oneOf": [
+            { "$ref": "#/$defs/checkpoint" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "hardwareIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runner", "accelerator", "architecture"],
+      "properties": {
+        "runner": { "type": "string", "minLength": 1 },
+        "accelerator": { "type": "string", "minLength": 1 },
+        "architecture": { "type": ["string", "null"], "minLength": 1 },
+        "prefill_accelerator": { "type": ["string", "null"], "minLength": 1 },
+        "decode_accelerator": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "frameworkIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matrix_label", "frontend", "backend"],
+      "properties": {
+        "matrix_label": { "type": "string", "minLength": 1 },
+        "frontend": {
+          "oneOf": [
+            { "$ref": "#/$defs/component" },
+            { "type": "null" }
+          ]
+        },
+        "backend": { "$ref": "#/$defs/component" }
+      }
+    },
+    "benchmarkIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benchmark_type",
+        "scenario_type",
+        "model",
+        "hardware",
+        "precision",
+        "framework",
+        "topology",
+        "speculative_method"
+      ],
+      "properties": {
+        "benchmark_type": { "enum": ["fixed_sequence", "agentx"] },
+        "scenario_type": { "enum": ["fixed-seq-len", "agentic-coding"] },
+        "model": { "$ref": "#/$defs/modelIdentity" },
+        "hardware": { "$ref": "#/$defs/hardwareIdentity" },
+        "precision": { "type": "string", "minLength": 1 },
+        "framework": { "$ref": "#/$defs/frameworkIdentity" },
+        "topology": { "enum": ["aggregated", "disaggregated"] },
+        "speculative_method": {
+          "enum": ["none", "mtp", "eagle", "eagle3", "draft_model", "dspark", "other"]
+        },
+        "speculative_method_raw": { "type": ["string", "null"] },
+        "extensions": { "type": "object", "additionalProperties": true }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "benchmark_type": { "const": "fixed_sequence" } },
+            "required": ["benchmark_type"]
+          },
+          "then": {
+            "properties": { "scenario_type": { "const": "fixed-seq-len" } }
+          }
+        },
+        {
+          "if": {
+            "properties": { "benchmark_type": { "const": "agentx" } },
+            "required": ["benchmark_type"]
+          },
+          "then": {
+            "properties": { "scenario_type": { "const": "agentic-coding" } }
+          }
+        }
+      ]
+    },
+    "datasetIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "loader",
+        "corpus",
+        "repository",
+        "revision",
+        "resolved_commit",
+        "split",
+        "digest"
+      ],
+      "properties": {
+        "loader": { "type": "string", "minLength": 1 },
+        "corpus": { "type": "string", "minLength": 1 },
+        "repository": { "type": ["string", "null"], "minLength": 1 },
+        "revision": { "type": ["string", "null"], "minLength": 1 },
+        "resolved_commit": { "type": ["string", "null"], "minLength": 1 },
+        "split": { "type": ["string", "null"], "minLength": 1 },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "filters": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "fixedSequenceWorkload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "workload_id",
+        "workload_digest",
+        "input_sequence_length",
+        "output_sequence_length",
+        "max_model_length",
+        "random_range_ratio"
+      ],
+      "properties": {
+        "kind": { "const": "fixed_sequence" },
+        "workload_id": { "type": "string", "minLength": 1 },
+        "workload_digest": { "$ref": "#/$defs/digest" },
+        "input_sequence_length": { "$ref": "#/$defs/positiveInteger" },
+        "output_sequence_length": { "$ref": "#/$defs/positiveInteger" },
+        "max_model_length": { "$ref": "#/$defs/positiveInteger" },
+        "random_range_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "request_generation": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "agentxWorkload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "workload_id",
+        "workload_digest",
+        "profile_id",
+        "benchmark_mode",
+        "duration_seconds",
+        "dataset",
+        "behavior_contract"
+      ],
+      "properties": {
+        "kind": { "const": "agentx" },
+        "workload_id": { "type": "string", "minLength": 1 },
+        "workload_digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "profile_id": { "type": ["string", "null"], "minLength": 1 },
+        "benchmark_mode": { "enum": ["canonical", "fast", "diagnostic"] },
+        "duration_seconds": {
+          "oneOf": [
+            { "$ref": "#/$defs/positiveInteger" },
+            { "type": "null" }
+          ]
+        },
+        "dataset": {
+          "oneOf": [
+            { "$ref": "#/$defs/datasetIdentity" },
+            { "type": "null" }
+          ]
+        },
+        "behavior_contract": {
+          "oneOf": [
+            { "$ref": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/main/schemas/inferencex-benchmark-semantics-v1.json#/$defs/behaviorContract" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "workerRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "worker_count",
+        "accelerators_per_worker",
+        "physical_accelerators",
+        "tp",
+        "pp",
+        "dcp",
+        "pcp",
+        "ep",
+        "dp_attention",
+        "hardware"
+      ],
+      "properties": {
+        "role": { "enum": ["aggregated", "prefill", "decode", "frontend", "router"] },
+        "worker_count": { "$ref": "#/$defs/nonNegativeInteger" },
+        "accelerators_per_worker": { "$ref": "#/$defs/nonNegativeInteger" },
+        "physical_accelerators": { "$ref": "#/$defs/nonNegativeInteger" },
+        "tp": { "$ref": "#/$defs/nonNegativeInteger" },
+        "pp": { "$ref": "#/$defs/positiveInteger" },
+        "dcp": { "$ref": "#/$defs/positiveInteger" },
+        "pcp": { "$ref": "#/$defs/positiveInteger" },
+        "ep": { "$ref": "#/$defs/nonNegativeInteger" },
+        "dp_attention": { "type": "boolean" },
+        "hardware": { "type": ["string", "null"], "minLength": 1 },
+        "batch_size": { "type": ["integer", "null"], "minimum": 1 },
+        "max_num_tokens": { "type": ["integer", "null"], "minimum": 1 },
+        "additional_settings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "kvOffload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "backend", "allocated_cpu_dram_gb", "peer_transfer"],
+      "properties": {
+        "mode": { "enum": ["none", "dram", "disk", "remote", "other"] },
+        "backend": {
+          "oneOf": [
+            { "$ref": "#/$defs/component" },
+            { "type": "null" }
+          ]
+        },
+        "allocated_cpu_dram_gb": { "$ref": "#/$defs/nonNegativeInteger" },
+        "peer_transfer": { "type": ["string", "null"], "minLength": 1 },
+        "extensions": { "type": "object", "additionalProperties": true }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "mode": { "const": "none" } },
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": {
+              "backend": { "type": "null" },
+              "allocated_cpu_dram_gb": { "const": 0 }
+            }
+          },
+          "else": {
+            "properties": {
+              "backend": { "$ref": "#/$defs/component" }
+            }
+          }
+        }
+      ]
+    },
+    "operatingPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "concurrency",
+        "node_count",
+        "active_accelerator_count",
+        "roles",
+        "client_placement",
+        "kv_offload",
+        "router"
+      ],
+      "properties": {
+        "concurrency": { "$ref": "#/$defs/positiveInteger" },
+        "node_count": { "$ref": "#/$defs/positiveInteger" },
+        "active_accelerator_count": { "$ref": "#/$defs/positiveInteger" },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/workerRole" }
+        },
+        "client_placement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "dedicated_node", "colocated_role"],
+          "properties": {
+            "mode": { "enum": ["head_node", "worker_node", "dedicated_node", "external", "unknown"] },
+            "dedicated_node": { "type": ["boolean", "null"] },
+            "colocated_role": { "enum": ["aggregated", "prefill", "decode", "frontend", "none", "unknown"] }
+          }
+        },
+        "kv_offload": { "$ref": "#/$defs/kvOffload" },
+        "router": {
+          "oneOf": [
+            { "$ref": "#/$defs/component" },
+            { "type": "null" }
+          ]
+        },
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "generatorIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "blob_object_id", "schema_version", "arguments"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "blob_object_id": { "$ref": "#/$defs/gitObjectId" },
+        "schema_version": { "type": "string", "minLength": 1 },
+        "arguments": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "configSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "config_key", "blob_object_id", "selector"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "config_key": { "type": "string", "minLength": 1 },
+        "blob_object_id": { "$ref": "#/$defs/gitObjectId" },
+        "selector": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "configDocumentSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "blob_object_id"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "blob_object_id": { "$ref": "#/$defs/gitObjectId" }
+      }
+    },
+    "recipeSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "blob_object_id", "selector"],
+      "properties": {
+        "kind": { "enum": ["single_node_script", "srt_slurm_recipe", "generated", "other"] },
+        "path": { "type": "string", "minLength": 1 },
+        "blob_object_id": { "$ref": "#/$defs/gitObjectId" },
+        "selector": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "resolvedRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generator",
+        "config_source",
+        "recipe_source",
+        "resolved_matrix_entry",
+        "matrix_fingerprint",
+        "point_fingerprint"
+      ],
+      "properties": {
+        "generator": {
+          "oneOf": [
+            { "$ref": "#/$defs/generatorIdentity" },
+            { "type": "null" }
+          ]
+        },
+        "config_source": {
+          "oneOf": [
+            { "$ref": "#/$defs/configSource" },
+            { "type": "null" }
+          ]
+        },
+        "recipe_source": {
+          "oneOf": [
+            { "$ref": "#/$defs/recipeSource" },
+            { "type": "null" }
+          ]
+        },
+        "resolved_matrix_entry": { "type": "object", "additionalProperties": true },
+        "matrix_fingerprint": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "point_fingerprint": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "fileEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "repository", "commit", "path", "blob_object_id", "role"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "master_config",
+            "matrix_generator",
+            "benchmark_script",
+            "recipe",
+            "runner",
+            "workflow",
+            "result_processor",
+            "validator",
+            "dataset",
+            "chat_template",
+            "golden_acceptance",
+            "other"
+          ]
+        },
+        "repository": { "type": "string", "minLength": 1 },
+        "commit": { "$ref": "#/$defs/gitObjectId" },
+        "path": { "type": "string", "minLength": 1 },
+        "blob_object_id": { "$ref": "#/$defs/gitObjectId" },
+        "role": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "repositoryDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "requested_ref", "resolved_commit", "path", "digest"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "requested_ref": { "type": ["string", "null"], "minLength": 1 },
+        "resolved_commit": {
+          "oneOf": [
+            { "$ref": "#/$defs/gitObjectId" },
+            { "type": "null" }
+          ]
+        },
+        "path": { "type": ["string", "null"], "minLength": 1 },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "purpose": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "imageEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "declared_reference", "platform", "manifest_digest"],
+      "properties": {
+        "role": { "type": "string", "minLength": 1 },
+        "declared_reference": { "type": "string", "minLength": 1 },
+        "platform": { "type": ["string", "null"], "minLength": 1 },
+        "manifest_digest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    },
+    "patchEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "base_commit", "head_commit", "patch_digest", "artifact"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "base_commit": {
+          "oneOf": [
+            { "$ref": "#/$defs/gitObjectId" },
+            { "type": "null" }
+          ]
+        },
+        "head_commit": {
+          "oneOf": [
+            { "$ref": "#/$defs/gitObjectId" },
+            { "type": "null" }
+          ]
+        },
+        "patch_digest": { "$ref": "#/$defs/digest" },
+        "artifact": {
+          "oneOf": [
+            { "$ref": "#/$defs/artifactEvidence" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "materializationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "digest", "artifact"],
+      "properties": {
+        "kind": { "enum": ["resolved_config", "server_command", "environment", "workflow_inputs", "rendered_request_probe", "other"] },
+        "digest": { "$ref": "#/$defs/digest" },
+        "artifact": {
+          "oneOf": [
+            { "$ref": "#/$defs/artifactEvidence" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "modelArtifactEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "repository", "revision", "resolved_commit", "digest"],
+      "properties": {
+        "role": { "enum": ["target", "draft", "tokenizer", "other"] },
+        "repository": { "type": "string", "minLength": 1 },
+        "revision": { "type": ["string", "null"], "minLength": 1 },
+        "resolved_commit": { "type": ["string", "null"], "minLength": 1 },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "inferencexSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "tree_object_id"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "commit": {
+          "oneOf": [
+            { "$ref": "#/$defs/gitObjectId" },
+            { "type": "null" }
+          ]
+        },
+        "tree_object_id": {
+          "oneOf": [
+            { "$ref": "#/$defs/gitObjectId" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "sourceLock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonicalization",
+        "source_lock_digest",
+        "inferencex",
+        "files",
+        "repository_dependencies",
+        "images",
+        "model_artifacts",
+        "patches",
+        "materializations",
+        "unresolved"
+      ],
+      "properties": {
+        "canonicalization": { "const": "RFC8785" },
+        "source_lock_digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "inferencex": { "$ref": "#/$defs/inferencexSource" },
+        "files": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fileEvidence" }
+        },
+        "repository_dependencies": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/repositoryDependency" }
+        },
+        "images": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/imageEvidence" }
+        },
+        "model_artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/modelArtifactEvidence" }
+        },
+        "patches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/patchEvidence" }
+        },
+        "materializations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/materializationEvidence" }
+        },
+        "unresolved": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "mountReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "destination", "read_only", "source_digest"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "destination": { "type": "string", "pattern": "^/" },
+        "read_only": { "type": "boolean" },
+        "source_digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "executionRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "component",
+        "container_role",
+        "argv",
+        "environment",
+        "redacted_environment_names",
+        "working_directory",
+        "mounts",
+        "resolved_config",
+        "resolved_config_digest"
+      ],
+      "properties": {
+        "role": { "enum": ["aggregated", "prefill", "decode", "frontend", "router", "benchmark_client", "other"] },
+        "component": { "$ref": "#/$defs/component" },
+        "container_role": { "type": "string", "minLength": 1 },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "null"] }
+        },
+        "redacted_environment_names": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "working_directory": { "type": ["string", "null"], "pattern": "^/" },
+        "mounts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/mountReceipt" }
+        },
+        "resolved_config": { "type": ["object", "null"], "additionalProperties": true },
+        "resolved_config_digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "effectiveExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "format", "digest", "roles", "redaction_policy"],
+      "properties": {
+        "schema_version": { "const": "inferencex.execution/v1" },
+        "format": { "enum": ["resolved_srt_slurm", "resolved_argv", "multi_role", "other"] },
+        "digest": { "$ref": "#/$defs/digest" },
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/executionRole" }
+        },
+        "redaction_policy": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sourceRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "run_id",
+        "run_attempt",
+        "job_id",
+        "job_name",
+        "event",
+        "head_sha",
+        "base_sha",
+        "status",
+        "conclusion",
+        "url",
+        "started_at",
+        "completed_at",
+        "reuse"
+      ],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "integer", "minimum": 1 },
+        "run_attempt": { "$ref": "#/$defs/positiveInteger" },
+        "job_id": { "type": ["integer", "null"], "minimum": 1 },
+        "job_name": { "type": ["string", "null"], "minLength": 1 },
+        "event": { "type": "string", "minLength": 1 },
+        "head_sha": { "$ref": "#/$defs/gitObjectId" },
+        "base_sha": {
+          "oneOf": [
+            { "$ref": "#/$defs/gitObjectId" },
+            { "type": "null" }
+          ]
+        },
+        "status": { "enum": ["queued", "in_progress", "completed"] },
+        "conclusion": {
+          "enum": ["success", "failure", "cancelled", "skipped", "timed_out", "action_required", "neutral", "stale", "startup_failure", null]
+        },
+        "url": { "type": "string", "format": "uri" },
+        "started_at": { "type": ["string", "null"], "format": "date-time" },
+        "completed_at": { "type": ["string", "null"], "format": "date-time" },
+        "reuse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reused", "source_run_id", "source_run_attempt", "source_record_id"],
+          "properties": {
+            "reused": { "type": "boolean" },
+            "source_run_id": { "type": ["integer", "null"], "minimum": 1 },
+            "source_run_attempt": { "type": ["integer", "null"], "minimum": 1 },
+            "source_record_id": { "type": ["string", "null"], "minLength": 1 }
+          }
+        }
+      }
+    },
+    "canonicalMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objective_profile_id",
+        "throughput_per_accelerator_tps",
+        "interactivity_tps_per_user",
+        "interactivity_statistic"
+      ],
+      "properties": {
+        "objective_profile_id": { "type": "string", "minLength": 1 },
+        "throughput_per_accelerator_tps": { "$ref": "#/$defs/positiveNumberOrNull" },
+        "interactivity_tps_per_user": { "$ref": "#/$defs/positiveNumberOrNull" },
+        "interactivity_statistic": {
+          "enum": ["median_token", "p90_full_response", "mean_token", "other", null]
+        },
+        "total_token_throughput_tps": { "$ref": "#/$defs/positiveNumberOrNull" },
+        "input_token_throughput_tps": { "$ref": "#/$defs/positiveNumberOrNull" },
+        "output_token_throughput_tps": { "$ref": "#/$defs/positiveNumberOrNull" },
+        "average_power_watts_per_accelerator": { "$ref": "#/$defs/positiveNumberOrNull" },
+        "energy_joules_per_token": { "$ref": "#/$defs/positiveNumberOrNull" }
+      }
+    },
+    "validationCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "details", "evidence_artifacts"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["passed", "failed", "not_run", "unknown"] },
+        "details": { "type": ["string", "null"] },
+        "evidence_artifacts": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "status", "measured_at", "metrics", "raw_metrics", "validation", "warnings"],
+      "properties": {
+        "kind": { "enum": ["throughput", "accuracy", "combined", "diagnostic"] },
+        "status": { "enum": ["valid", "invalid", "incomplete", "failed"] },
+        "measured_at": { "type": ["string", "null"], "format": "date-time" },
+        "metrics": { "$ref": "#/$defs/canonicalMetrics" },
+        "raw_metrics": { "type": "object", "additionalProperties": true },
+        "validation": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/validationCheck" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": { "const": "valid" },
+              "kind": { "enum": ["throughput", "combined"] }
+            },
+            "required": ["status", "kind"]
+          },
+          "then": {
+            "properties": {
+              "metrics": {
+                "properties": {
+                  "throughput_per_accelerator_tps": { "$ref": "#/$defs/positiveNumber" },
+                  "interactivity_tps_per_user": { "$ref": "#/$defs/positiveNumber" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "upstream_row_id",
+        "published_at",
+        "ingested_at",
+        "supersedes_record_id"
+      ],
+      "properties": {
+        "status": { "enum": ["draft", "published", "invalid", "superseded"] },
+        "upstream_row_id": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "published_at": { "type": ["string", "null"], "format": "date-time" },
+        "ingested_at": { "type": ["string", "null"], "format": "date-time" },
+        "supersedes_record_id": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
+    "artifactEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "url", "digest", "retention_expires_at"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["result", "raw_result", "server_log", "validation", "metrics", "manifest", "other"] },
+        "url": { "type": ["string", "null"], "format": "uri" },
+        "digest": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
+        "retention_expires_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "reproducibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "verified", "verified_at", "missing_fields", "notes"],
+      "properties": {
+        "status": { "enum": ["complete", "partial", "unavailable"] },
+        "verified": { "type": "boolean" },
+        "verified_at": { "type": ["string", "null"], "format": "date-time" },
+        "missing_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^/" }
+        },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "complete" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "verified": { "const": true },
+              "missing_fields": { "maxItems": 0 }
+            }
+          },
+          "else": {
+            "properties": { "missing_fields": { "minItems": 1 } }
+          }
+        }
+      ]
+    },
+    "resultRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_schema_version",
+        "record_id",
+        "point_id",
+        "publication",
+        "identity",
+        "workload",
+        "point",
+        "resolved_recipe",
+        "effective_execution",
+        "source_lock",
+        "source_run",
+        "measurement",
+        "artifacts",
+        "reproducibility",
+        "extensions"
+      ],
+      "properties": {
+        "record_schema_version": { "const": "inferencex.result/v1" },
+        "record_id": { "type": "string", "minLength": 1 },
+        "point_id": { "type": "string", "minLength": 1 },
+        "publication": { "$ref": "#/$defs/publication" },
+        "identity": { "$ref": "#/$defs/benchmarkIdentity" },
+        "workload": {
+          "oneOf": [
+            { "$ref": "#/$defs/fixedSequenceWorkload" },
+            { "$ref": "#/$defs/agentxWorkload" }
+          ]
+        },
+        "point": { "$ref": "#/$defs/operatingPoint" },
+        "resolved_recipe": { "$ref": "#/$defs/resolvedRecipe" },
+        "effective_execution": {
+          "oneOf": [
+            { "$ref": "#/$defs/effectiveExecution" },
+            { "type": "null" }
+          ]
+        },
+        "source_lock": { "$ref": "#/$defs/sourceLock" },
+        "source_run": { "$ref": "#/$defs/sourceRun" },
+        "measurement": { "$ref": "#/$defs/measurement" },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactEvidence" }
+        },
+        "reproducibility": { "$ref": "#/$defs/reproducibility" },
+        "extensions": { "type": "object", "additionalProperties": true }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "properties": { "benchmark_type": { "const": "fixed_sequence" } },
+                "required": ["benchmark_type"]
+              }
+            }
+          },
+          "then": {
+            "properties": { "workload": { "$ref": "#/$defs/fixedSequenceWorkload" } }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "properties": { "benchmark_type": { "const": "agentx" } },
+                "required": ["benchmark_type"]
+              }
+            }
+          },
+          "then": {
+            "properties": { "workload": { "$ref": "#/$defs/agentxWorkload" } }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "reproducibility": {
+                "properties": { "status": { "const": "complete" } },
+                "required": ["status"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_lock": {
+                "properties": {
+                  "source_lock_digest": { "$ref": "#/$defs/digest" },
+                  "unresolved": { "maxItems": 0 }
+                }
+              },
+              "resolved_recipe": {
+                "properties": {
+                  "matrix_fingerprint": { "$ref": "#/$defs/digest" },
+                  "point_fingerprint": { "$ref": "#/$defs/digest" }
+                }
+              },
+              "effective_execution": { "$ref": "#/$defs/effectiveExecution" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "identity": {
+                "properties": { "benchmark_type": { "const": "agentx" } },
+                "required": ["benchmark_type"]
+              },
+              "reproducibility": {
+                "properties": { "status": { "const": "complete" } },
+                "required": ["status"]
+              }
+            },
+            "required": ["identity", "reproducibility"]
+          },
+          "then": {
+            "properties": {
+              "workload": {
+                "properties": {
+                  "workload_digest": { "$ref": "#/$defs/digest" },
+                  "profile_id": { "type": "string", "minLength": 1 },
+                  "duration_seconds": { "$ref": "#/$defs/positiveInteger" },
+                  "dataset": { "$ref": "#/$defs/datasetIdentity" },
+                  "behavior_contract": {
+                    "$ref": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/main/schemas/inferencex-benchmark-semantics-v1.json#/$defs/behaviorContract"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "resultRecordDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_type", "schema_version", "generated_at", "result"],
+      "properties": {
+        "document_type": { "const": "inferencex.result-record" },
+        "schema_version": { "const": "inferencex.exchange/v1" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "result": { "$ref": "#/$defs/resultRecord" }
+      }
+    },
+    "resultSetDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_type",
+        "schema_version",
+        "generated_at",
+        "source",
+        "results",
+        "pagination"
+      ],
+      "properties": {
+        "document_type": { "const": "inferencex.result-set" },
+        "schema_version": { "const": "inferencex.exchange/v1" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["service", "snapshot_id", "as_of"],
+          "properties": {
+            "service": { "type": "string", "minLength": 1 },
+            "snapshot_id": { "type": "string", "minLength": 1 },
+            "as_of": { "type": "string", "format": "date-time" }
+          }
+        },
+        "results": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/resultRecord" }
+        },
+        "pagination": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["next_cursor", "returned"],
+          "properties": {
+            "next_cursor": { "type": ["string", "null"], "minLength": 1 },
+            "returned": { "$ref": "#/$defs/nonNegativeInteger" }
+          }
+        }
+      }
+    },
+    "pointPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "point_id",
+        "matrix_fingerprint",
+        "point_fingerprint",
+        "resolved_matrix_entry",
+        "job_key",
+        "job_name"
+      ],
+      "properties": {
+        "point_id": { "type": "string", "minLength": 1 },
+        "matrix_fingerprint": { "$ref": "#/$defs/digest" },
+        "point_fingerprint": { "$ref": "#/$defs/digest" },
+        "resolved_matrix_entry": { "type": "object", "additionalProperties": true },
+        "job_key": { "type": "string", "minLength": 1 },
+        "job_name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "pointOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "point_id",
+        "status",
+        "job_id",
+        "record_id",
+        "result_artifact",
+        "job_manifest_artifact",
+        "failure"
+      ],
+      "properties": {
+        "point_id": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["queued", "in_progress", "success", "failed", "cancelled", "skipped", "reused"] },
+        "job_id": { "type": ["integer", "null"], "minimum": 1 },
+        "record_id": { "type": ["string", "null"], "minLength": 1 },
+        "result_artifact": { "type": ["string", "null"], "minLength": 1 },
+        "job_manifest_artifact": { "type": "string", "minLength": 1 },
+        "failure": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["code", "message", "step"],
+              "properties": {
+                "code": { "type": "string", "minLength": 1 },
+                "message": { "type": "string", "minLength": 1 },
+                "step": { "type": ["string", "null"], "minLength": 1 }
+              }
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "generationReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generator", "config_sources", "expanded_matrix_digest", "filters"],
+      "properties": {
+        "generator": { "$ref": "#/$defs/generatorIdentity" },
+        "config_sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/configDocumentSource" }
+        },
+        "expanded_matrix_digest": { "$ref": "#/$defs/digest" },
+        "filters": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "jobManifestDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_type",
+        "schema_version",
+        "generated_at",
+        "run",
+        "plan",
+        "outcome",
+        "source_lock"
+      ],
+      "properties": {
+        "document_type": { "const": "inferencex.job-manifest" },
+        "schema_version": { "const": "inferencex.exchange/v1" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "run": { "$ref": "#/$defs/sourceRun" },
+        "plan": { "$ref": "#/$defs/pointPlan" },
+        "outcome": { "$ref": "#/$defs/pointOutcome" },
+        "source_lock": { "$ref": "#/$defs/sourceLock" }
+      }
+    },
+    "runManifestDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_type",
+        "schema_version",
+        "generated_at",
+        "run",
+        "generation",
+        "planned_points",
+        "outcomes"
+      ],
+      "properties": {
+        "document_type": { "const": "inferencex.run-manifest" },
+        "schema_version": { "const": "inferencex.exchange/v1" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "run": { "$ref": "#/$defs/sourceRun" },
+        "generation": { "$ref": "#/$defs/generationReceipt" },
+        "planned_points": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pointPlan" }
+        },
+        "outcomes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pointOutcome" }
+        }
+      }
+    }
+  }
+}
