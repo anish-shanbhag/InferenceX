@@ -27,6 +27,19 @@
     "jsonScalar": {
       "type": ["string", "number", "integer", "boolean", "null"]
     },
+    "jsonValue": {
+      "oneOf": [
+        { "$ref": "#/$defs/jsonScalar" },
+        {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jsonValue" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      ]
+    },
     "sourcePointer": {
       "type": "object",
       "additionalProperties": false,
@@ -142,7 +155,24 @@
         "client_kwargs": { "type": "object", "additionalProperties": true },
         "server_default_kwargs": { "type": "object", "additionalProperties": true },
         "add_generation_prompt": { "type": ["boolean", "null"] }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "resolved" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "use_chat_template": { "type": "boolean" },
+              "tokenization_side": { "not": { "const": "unknown" } },
+              "template": {
+                "properties": { "kind": { "not": { "const": "unknown" } } }
+              }
+            }
+          }
+        }
+      ]
     },
     "thinkingContract": {
       "type": "object",
@@ -458,9 +488,9 @@
         "surface": { "enum": ["environment", "cli_argument", "config_field"] },
         "location": { "type": "string", "minLength": 1 },
         "transform": { "enum": ["identity", "minus_one", "acceptance_rate", "position_schedule", "other"] },
-        "encoded_value": { "$ref": "#/$defs/jsonScalar" },
+        "encoded_value": { "$ref": "#/$defs/jsonValue" },
         "evaluation_scope": { "enum": ["throughput", "accuracy", "all"] },
-        "native_value": { "$ref": "#/$defs/jsonScalar" }
+        "native_value": { "$ref": "#/$defs/jsonValue" }
       }
     },
     "runtimeVerification": {
@@ -504,13 +534,48 @@
           "then": {
             "properties": {
               "curve_selection": { "$ref": "#/$defs/curveSelection" },
-              "injections": { "minItems": 1 }
+              "injections": {
+                "minItems": 1,
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/acceptanceInjection" },
+                    {
+                      "properties": {
+                        "evaluation_scope": { "const": "throughput" }
+                      }
+                    }
+                  ]
+                }
+              }
             }
           }
         },
         {
           "if": {
-            "properties": { "mode": { "enum": ["real", "disabled"] } },
+            "properties": { "mode": { "const": "real" } },
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": {
+              "curve_selection": { "type": "null" },
+              "injections": {
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/acceptanceInjection" },
+                    {
+                      "properties": {
+                        "evaluation_scope": { "enum": ["accuracy", "all"] }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "mode": { "const": "disabled" } },
             "required": ["mode"]
           },
           "then": {
@@ -599,6 +664,7 @@
         "behavior_schema_version",
         "contract_id",
         "contract_digest",
+        "contract_digest_scope",
         "status",
         "benchmark_protocol",
         "request",
@@ -614,6 +680,9 @@
             { "$ref": "#/$defs/digest" },
             { "type": "null" }
           ]
+        },
+        "contract_digest_scope": {
+          "const": "planned_behavior_excluding_contract_identity_and_runtime_verification"
         },
         "status": { "enum": ["resolved", "partial", "unknown"] },
         "benchmark_protocol": {
@@ -708,7 +777,27 @@
               "items": { "type": "number", "minimum": 0, "maximum": 1 }
             },
             "derivation": { "type": ["string", "null"], "minLength": 1 }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": { "kind": { "const": "mean_only" } },
+                "required": ["kind"]
+              },
+              "then": {
+                "properties": {
+                  "values": { "maxItems": 0 },
+                  "derivation": { "type": "null" }
+                }
+              },
+              "else": {
+                "properties": {
+                  "values": { "minItems": 1 },
+                  "derivation": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -840,7 +929,57 @@
             "notes": { "type": "array", "items": { "type": "string" } }
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "active" } },
+            "required": ["status"]
+          },
+          "then": {
+            "properties": {
+              "target_checkpoint": {
+                "properties": {
+                  "revision": { "type": "string", "minLength": 1 },
+                  "resolved_commit": { "type": "string", "minLength": 1 },
+                  "digest": { "$ref": "#/$defs/digest" }
+                }
+              },
+              "collection": {
+                "properties": {
+                  "dataset": {
+                    "properties": {
+                      "revision": { "type": "string", "minLength": 1 },
+                      "resolved_commit": { "type": "string", "minLength": 1 },
+                      "digest": { "$ref": "#/$defs/digest" }
+                    }
+                  },
+                  "framework_version": { "type": "string", "minLength": 1 },
+                  "image": {
+                    "properties": { "manifest_digest": { "$ref": "#/$defs/digest" } }
+                  },
+                  "artifacts": {
+                    "minItems": 1,
+                    "items": {
+                      "allOf": [
+                        { "$ref": "#/$defs/artifactPointer" },
+                        { "properties": { "digest": { "$ref": "#/$defs/digest" } } }
+                      ]
+                    }
+                  }
+                }
+              },
+              "validation": {
+                "properties": {
+                  "review_status": { "const": "approved" },
+                  "reviewed_by": { "minItems": 1 },
+                  "reviewed_at": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "goldenAcceptanceCurveDocument": {
       "type": "object",

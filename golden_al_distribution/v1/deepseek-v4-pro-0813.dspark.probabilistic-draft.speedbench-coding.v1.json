@@ -1,0 +1,193 @@
+{
+  "document_type": "inferencex.golden-acceptance-curve",
+  "schema_version": "inferencex.golden-acceptance/v1",
+  "generated_at": "2026-09-09T00:00:00Z",
+  "curve": {
+    "curve_schema_version": "inferencex.golden-acceptance/v1",
+    "curve_id": "deepseek-v4-pro-0813.dspark.probabilistic-draft.speedbench-coding.v1",
+    "curve_digest": "sha256:ebb491d03620b52111db9aee28423268515414d59ed84a2fdad791bc187fd4d5",
+    "status": "draft",
+    "model_key": "deepseek-v4-pro-0813",
+    "target_checkpoint": {
+      "repository": "deepseek-ai/DeepSeek-V4-Pro-DSpark",
+      "revision": null,
+      "resolved_commit": null,
+      "digest": null
+    },
+    "draft": {
+      "kind": "embedded_heads",
+      "checkpoint": null,
+      "variant": "probabilistic-draft",
+      "num_speculative_tokens": null,
+      "num_speculative_steps": null,
+      "top_k": null,
+      "extensions": {}
+    },
+    "method": "dspark",
+    "variant": "probabilistic-draft",
+    "modes": [
+      {
+        "thinking_state": "enabled",
+        "sampling": {
+          "temperature": 1.0,
+          "top_p": null,
+          "top_k": null,
+          "min_p": null,
+          "presence_penalty": null,
+          "frequency_penalty": null,
+          "repetition_penalty": null,
+          "seed": null,
+          "max_output_tokens": 4096,
+          "ignore_eos": null,
+          "stop": null,
+          "extensions": {}
+        },
+        "chat_template": {
+          "status": "unknown",
+          "use_chat_template": true,
+          "tokenization_side": "client",
+          "template": {
+            "kind": "unknown",
+            "repository": null,
+            "revision": null,
+            "path": null,
+            "digest": null
+          },
+          "client_kwargs": {
+            "thinking": true,
+            "reasoning_effort": "high"
+          },
+          "server_default_kwargs": {},
+          "add_generation_prompt": null
+        },
+        "points": [
+          {
+            "num_speculative_tokens": 1,
+            "acceptance_length": 1.84,
+            "distribution": {
+              "kind": "mean_only",
+              "values": [],
+              "derivation": null
+            }
+          },
+          {
+            "num_speculative_tokens": 2,
+            "acceptance_length": 2.51,
+            "distribution": {
+              "kind": "mean_only",
+              "values": [],
+              "derivation": null
+            }
+          },
+          {
+            "num_speculative_tokens": 3,
+            "acceptance_length": 3.01,
+            "distribution": {
+              "kind": "mean_only",
+              "values": [],
+              "derivation": null
+            }
+          },
+          {
+            "num_speculative_tokens": 4,
+            "acceptance_length": 3.36,
+            "distribution": {
+              "kind": "mean_only",
+              "values": [],
+              "derivation": null
+            }
+          },
+          {
+            "num_speculative_tokens": 5,
+            "acceptance_length": 3.61,
+            "distribution": {
+              "kind": "mean_only",
+              "values": [],
+              "derivation": null
+            }
+          },
+          {
+            "num_speculative_tokens": 6,
+            "acceptance_length": 3.77,
+            "distribution": {
+              "kind": "mean_only",
+              "values": [],
+              "derivation": null
+            }
+          },
+          {
+            "num_speculative_tokens": 7,
+            "acceptance_length": 3.73,
+            "distribution": {
+              "kind": "mean_only",
+              "values": [],
+              "derivation": null
+            }
+          },
+          {
+            "num_speculative_tokens": 8,
+            "acceptance_length": 3.47,
+            "distribution": {
+              "kind": "mean_only",
+              "values": [],
+              "derivation": null
+            }
+          }
+        ]
+      }
+    ],
+    "collection": {
+      "dataset": {
+        "repository": "nvidia/SPEED-Bench",
+        "revision": null,
+        "resolved_commit": null,
+        "split": "Qualitative",
+        "digest": null
+      },
+      "category": "coding",
+      "prompt_count": 80,
+      "output_length": 4096,
+      "formula": "1 + accepted_draft_tokens / verification_steps",
+      "statistic": "mean_acceptance_length",
+      "rounding_decimals": 2,
+      "framework": "vllm",
+      "framework_version": null,
+      "image": {
+        "reference": "unknown",
+        "manifest_digest": null
+      },
+      "hardware": "NVIDIA B300",
+      "collector": {
+        "repository": "https://github.com/SemiAnalysisAI/InferenceX",
+        "commit": "b9c9f925f10a39525b8f08ef0be87996c09f0939",
+        "path": "benchmarks/single_node/speedbench/dsv4dspark_fp4_b300_vllm.sh",
+        "blob_object_id": "59c138d82a570c4ddf835b072b31cd6935951631"
+      },
+      "workflow_run_url": "https://github.com/SemiAnalysisAI/InferenceX/actions/runs/31742838308",
+      "workflow_run_id": 31742838308,
+      "workflow_run_attempt": 1,
+      "artifacts": [
+        {
+          "name": "speedbench-reference-al",
+          "url": null,
+          "digest": null
+        }
+      ]
+    },
+    "source": {
+      "repository": "https://github.com/SemiAnalysisAI/InferenceX",
+      "commit": "b9c9f925f10a39525b8f08ef0be87996c09f0939",
+      "path": "golden_al_distribution/dsv4-pro-0813-dspark.yaml",
+      "blob_object_id": "cab002f9d0617a14787b5bf58046e875097b4474"
+    },
+    "validation": {
+      "review_status": "pending",
+      "reviewed_by": [],
+      "reviewed_at": null,
+      "notes": [
+        "Mechanically migrated from the cited legacy curve without changing numeric cells.",
+        "Checkpoint, dataset, image, tokenizer/template, and retained-artifact digests require review before activation."
+      ]
+    }
+  }
+}

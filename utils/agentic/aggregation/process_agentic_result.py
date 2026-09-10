@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from infx.results.metadata import parse_component_metadata
+from infx.semantics.contracts import SemanticsError, load_document
+from infx.semantics.models import BehaviorContractDocument
 
 from .aggregation_common import round_floats
 from .request_metrics import compute_request_metrics, load_aggregate, load_records_with_accounting
@@ -260,6 +262,24 @@ def _resolve_artifact_dir(result_dir: Path) -> Path:
     return base
 
 
+def attach_behavior_contract(agg: dict[str, Any], result_dir: Path) -> None:
+    """Embed the exact validated behavior receipt staged before replay."""
+
+    behavior_path = result_dir / "behavior_contract.json"
+    if not behavior_path.exists():
+        # Direct legacy/offline invocations predate the producer receipt. The
+        # normal benchmark_lib.sh path always stages it before replay.
+        return
+    try:
+        document = load_document(behavior_path)
+    except SemanticsError as exc:
+        raise SystemExit(f"invalid AgentX behavior contract: {exc}") from exc
+    if not isinstance(document, BehaviorContractDocument):
+        raise SystemExit(f"{behavior_path} is not an AgentX behavior contract")
+    agg["behavior_contract"] = document.behavior.model_dump(mode="json")
+    agg["behavior_contract_digest"] = document.behavior.contract_digest
+
+
 def main() -> int:
     result_filename = os.environ.get("RESULT_FILENAME", "")
     if not result_filename:
@@ -291,6 +311,7 @@ def main() -> int:
             server_log_paths=server_log_paths,
         )
     )
+    attach_behavior_contract(agg, result_dir)
 
     output_path = output_dir / f"{result_filename}.json"
     output_dir.mkdir(parents=True, exist_ok=True)

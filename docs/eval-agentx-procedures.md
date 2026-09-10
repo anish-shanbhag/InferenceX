@@ -258,6 +258,8 @@ For each concurrency retain:
 
 The runner writes the command before replay and validates raw results after aggregation ([execution path](../benchmarks/benchmark_lib.sh#L2320-L2360)). Aggregation preserves dataset provenance and hardware/model/topology fields ([aggregate construction](../utils/agentic/aggregation/process_agentic_result.py#L194-L272)). Raw workflow uploads intentionally omit very large `inputs.json` and `profile_export_raw.jsonl`. If those are required for an investigation, preserve them from the live allocation before cleanup ([single-node artifact contract](../.github/workflows/benchmark-tmpl.yml#L349-L358), [multi-node contract](../.github/workflows/benchmark-multinode-tmpl.yml#L455-L464)).
 
+The runner also stages and validates `results/behavior_contract.json` before replay. A launch environment may set `INFERENCEX_BEHAVIOR_CONTRACT` to a resolved contract; otherwise the runner writes a partial receipt whose `missing_fields` make unresolved request, trace, thinking, template, sampling, and speculative-role semantics explicit. Aggregation embeds the validated `behavior` and `behavior_contract_digest`. A partial digest is diagnostic identity, not evidence of behavioral comparability. See [`benchmark-semantics.md`](./benchmark-semantics.md) for the full contract and golden-curve rules.
+
 ## 9. Debug long AgentX runs from live evidence
 
 GitHub Actions is the orchestration/final-status view. The cluster is the live diagnostic source. Obtain the SSH alias, runner user, and access-controlled paths from the InferenceX Clusters canvas. Never guess or publish private infrastructure coordinates.
@@ -344,6 +346,7 @@ Use `scancel` or process termination only with explicit approval and a concrete 
 - Full eval has no `EVAL_LIMIT`, and every expected batch point is completed and has a suffixed result.
 - `validate_scores.py` passes against the intended task/model threshold.
 - Aggregate and raw eval/AgentX artifacts are downloaded and internally consistent.
+- AgentX artifacts contain a valid behavior receipt; any `partial` status and `missing_fields` are reported, not treated as defaults or comparability evidence.
 - AgentX corpus, replay mode, exact command, commit, image, recipe, topology, and fast/override state are recorded.
 - Every backend/frontend and metrics source is represented in live evidence.
 - Fast/smoke results are labeled diagnostic. Only the canonical candidate is used for final comparison.

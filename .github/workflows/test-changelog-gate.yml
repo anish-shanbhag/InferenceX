@@ -24,6 +24,8 @@ on:
       - ".github/workflows/test-changelog-gate.yml"
       - ".github/workflows/trusted-external-sweep.yml"
       - "benchmarks/benchmark_lib.sh"
+      - "golden_al_distribution/**"
+      - "schemas/inferencex-benchmark-semantics-v1.json"
       - "configs/ci-priority.yaml"
       - "benchmarks/multi_node/amd_utils/job.slurm"
       - "runners/launch_*.sh"
@@ -35,6 +37,8 @@ on:
       - "utils/test_find_reusable_sweep_run.py"
       - "utils/process_changelog.py"
       - "utils/test_process_changelog.py"
+      - "utils/benchmark_semantics.py"
+      - "utils/migrate_golden_curves.py"
       - "utils/collect_eval_results.py"
       - "utils/test_collect_eval_results.py"
       - "utils/evals/validate_scores.py"
@@ -96,8 +100,10 @@ jobs:
       - name: Run validator, reuse, and gating tests
         run: |
           uv run --no-project --exclude-newer PT12H --python 3.12 \
-            --with pytest --with pytest-xdist --with "pydantic>=2" --with pyyaml --with tabulate \
+            --with pytest --with pytest-xdist --with "pydantic>=2" --with pyyaml \
+            --with rfc8785 --with jsonschema --with tabulate \
             python -m pytest \
+            infx/semantics/test_contracts.py \
             utils/changelog_gate_tests/test_validate_perf_changelog.py \
             utils/test_find_reusable_sweep_run.py \
             utils/changelog_gate_tests/test_prepare_perf_changelog_merge.py \

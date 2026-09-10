@@ -256,6 +256,8 @@ gh run download "$RUN_ID" --repo SemiAnalysisAI/InferenceX \
 
 Runner 会在 replay 前写入命令，并在聚合后校验原始结果（[执行路径](../benchmarks/benchmark_lib.sh#L2320-L2360)）。聚合会保留 dataset provenance 以及硬件/模型/拓扑字段（[aggregate 构造](../utils/agentic/aggregation/process_agentic_result.py#L194-L272)）。工作流的 raw upload 会有意排除体积很大的 `inputs.json` 和 `profile_export_raw.jsonl`；如果调查需要这些文件，应在清理前从实时 allocation 保存（[单节点 artifact 约定](../.github/workflows/benchmark-tmpl.yml#L349-L358)、[多节点约定](../.github/workflows/benchmark-multinode-tmpl.yml#L455-L464)）。
 
+Runner 还会在 replay 前暂存并校验 `results/behavior_contract.json`。启动环境可以设置 `INFERENCEX_BEHAVIOR_CONTRACT` 以提供 resolved 契约；否则 runner 会写入 partial 收据，通过 `missing_fields` 明确标出未解析的请求、trace、思考模式、template、采样和推测角色语义。聚合结果会嵌入已校验的 `behavior` 与 `behavior_contract_digest`。Partial digest 只用于诊断身份，不能证明行为可比。完整的契约与黄金曲线规则见 [`benchmark-semantics_zh.md`](./benchmark-semantics_zh.md)。
+
 ## 9. 用实时证据调试长时间 AgentX 运行
 
 GitHub Actions 是 orchestration/最终状态视图；cluster 是实时诊断来源。从 InferenceX Clusters canvas 获取 SSH alias、runner user 和受访问控制的路径。绝不要猜测或公开私有基础设施坐标。
@@ -342,6 +344,7 @@ gh run cancel <RUN_ID> --repo SemiAnalysisAI/InferenceX
 - 完整 eval 未设置 `EVAL_LIMIT`；每个预期 batch 点都已完成且有带后缀的结果。
 - `validate_scores.py` 针对预期 task/model 阈值通过。
 - Aggregate 与 raw eval/AgentX artifact 均已下载且内部一致。
+- AgentX artifact 包含有效的行为收据；如状态为 `partial`，必须报告 `missing_fields`，不能将其视作默认值或可比性证据。
 - 已记录 AgentX corpus、replay mode、准确命令、commit、image、recipe、topology 以及 fast/override 状态。
 - 每个 backend/frontend 与 metrics source 都在实时证据中有所体现。
 - Fast/smoke 结果明确标为诊断用途；只有 canonical candidate 用于最终比较。

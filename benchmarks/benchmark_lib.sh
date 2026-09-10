@@ -2900,6 +2900,9 @@ install_agentic_deps() {
         -e "$AIPERF_DIR" \
         "datasets>=4.7.0" \
         "huggingface_hub[cli]>=0.25.0" \
+        "pydantic>=2" \
+        "PyYAML>=6" \
+        "rfc8785>=0.1.4" \
         urllib3 \
         requests
 
@@ -2987,6 +2990,8 @@ resolve_trace_source() {
             ;;
     esac
     TRACE_SOURCE_FLAG="--public-dataset $loader"
+    export INFERENCEX_AGENTX_TRACE_LOADER="$loader"
+    export INFERENCEX_AGENTX_TRACE_DATASET="$dataset"
     echo "Loading traces via aiperf public-dataset: $loader ($dataset) [MODEL_PREFIX=${MODEL_PREFIX:-unset}]"
     # Pre-download the dataset into the shared HF_HUB_CACHE (same mount used
     # for model weights) so subsequent runs read from cache instead of
@@ -3176,6 +3181,36 @@ build_replay_cmd() {
     REPLAY_CMD+=" $TRACE_SOURCE_FLAG"
 }
 
+stage_agentx_behavior_contract() {
+    # A resolved producer-authored contract is the preferred path. Legacy
+    # recipes still receive an explicit partial receipt; unknown semantics are
+    # never silently promoted to defaults. The command file is hashed rather
+    # than embedded so credentials or internal endpoints cannot leak.
+    local result_dir="$1"
+    local measurement="${2:-throughput}"
+    local output="$result_dir/behavior_contract.json"
+    local semantics_cli="$INFMAX_CONTAINER_WORKSPACE/utils/benchmark_semantics.py"
+    local explicit_contract="${INFERENCEX_BEHAVIOR_CONTRACT:-}"
+
+    if [ ! -f "$semantics_cli" ]; then
+        echo "ERROR: benchmark semantics CLI not found: $semantics_cli" >&2
+        return 1
+    fi
+    if [ -n "$explicit_contract" ]; then
+        if [ ! -f "$explicit_contract" ]; then
+            echo "ERROR: INFERENCEX_BEHAVIOR_CONTRACT not found: $explicit_contract" >&2
+            return 1
+        fi
+        "$AIPERF_PYTHON" "$semantics_cli" materialize "$explicit_contract" \
+            --measurement "$measurement" --output "$output"
+    else
+        "$AIPERF_PYTHON" "$semantics_cli" capture-partial \
+            --replay-command-file "$result_dir/benchmark_command.txt" \
+            --measurement "$measurement" --output "$output"
+    fi
+    "$AIPERF_PYTHON" "$semantics_cli" validate "$output"
+}
+
 write_agentic_result_json() {
     # Aggregate aiperf's profile_export.{json,jsonl} + server_metrics_export.json
     # into $AGENTIC_OUTPUT_DIR/$RESULT_FILENAME.json. The workflow checks that
@@ -3299,6 +3334,10 @@ run_agentic_replay_and_write_outputs() (
     fi
 
     echo "$REPLAY_CMD" > "$result_dir/benchmark_command.txt"
+    if ! stage_agentx_behavior_contract "$result_dir" throughput; then
+        echo "ERROR: failed to stage the AgentX behavior contract" >&2
+        return 1
+    fi
 
     set +e
     set -x

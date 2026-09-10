@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'infx/results/**'
+      - 'infx/semantics/**'
       - '.github/workflows/benchmark-multinode-tmpl.yml'
       - '.github/workflows/benchmark-tmpl.yml'
       - '.github/workflows/e2e-tests.yml'
       - '.github/workflows/test-process-result.yml'
       - 'benchmarks/benchmark_lib.sh'
+      - 'schemas/inferencex-benchmark-semantics-v1.json'
       - 'benchmarks/multi_node/srt-slurm-recipes/sglang/deepseek-v4/**/*.yaml'
       - 'benchmarks/multi_node/srt-slurm-recipes/vllm/deepseek-v4/**/*.yaml'
       - 'benchmarks/multi_node/srt-slurm-recipes/vllm/kimi-k2.6/b200-fp4/**/*.yaml'
@@ -60,4 +62,5 @@ jobs:
         run: |
           cd utils
           uv run --no-project --exclude-newer PT12H --python 3.12 --with pytest --with pyyaml \
+            --with "pydantic>=2" --with rfc8785 \
             python -m pytest test_aggregate_power.py test_aggregate_power_multinode.py agentic/aggregation/test_power_adapter.py agentic/aggregation/test_power_lifecycle.py agentic/aggregation/test_process_agentic_result.py test_gb300_power_official_contract.py test_inject_srt_power_concurrencies.py test_process_result.py -v

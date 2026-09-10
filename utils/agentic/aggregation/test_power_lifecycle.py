@@ -23,6 +23,7 @@ def _run_lifecycle(
     enable_power: bool = True,
     require_power: bool = False,
     formal_multinode_power: bool = False,
+    behavior_contract_rc: int = 0,
 ) -> subprocess.CompletedProcess[str]:
     result_dir = tmp_path / "results"
     result_dir.mkdir()
@@ -45,6 +46,10 @@ fake_replay() {{
 write_agentic_result_json() {{
     printf 'aggregate\n' >> {str(event_log)!r}
     printf '{{}}\n' > "$AGENTIC_OUTPUT_DIR/$RESULT_FILENAME.json"
+}}
+stage_agentx_behavior_contract() {{
+    printf 'behavior-contract\n' >> {str(event_log)!r}
+    return {behavior_contract_rc}
 }}
 fake_python() {{
     case "$*" in
@@ -119,6 +124,7 @@ def test_single_node_monitor_wraps_replay_and_stops_once(
     assert events.index("monitor-start:--output " + str(tmp_path / "results/gpu_metrics.csv")) < events.index(
         "replay"
     )
+    assert events.index("behavior-contract") < events.index("replay")
     assert events.index("replay") < events.index("monitor-stop")
     assert events.index("monitor-stop") < events.index("aggregate")
     assert (tmp_path / "results/gpu_metrics.csv").is_file()
@@ -136,6 +142,16 @@ def test_single_node_invokes_adapter_with_gpu_shape_and_strict_mode(tmp_path: Pa
     assert "--agg-result " + str(tmp_path / "agg_agentx.json") in adapter_event
     assert "--expected-num-gpus 12" in adapter_event
     assert "--require-power" in adapter_event
+
+
+def test_invalid_behavior_contract_stops_before_replay(tmp_path: Path):
+    result = _run_lifecycle(tmp_path, behavior_contract_rc=2)
+
+    assert result.returncode == 1
+    events = _events(tmp_path)
+    assert "behavior-contract" in events
+    assert "replay" not in events
+    assert "aggregate" not in events
 
 
 @pytest.mark.parametrize(
@@ -215,6 +231,7 @@ fake_replay() {{
     printf 'replay-ready\n' >> {str(event_log)!r}
     exec sleep 30
 }}
+stage_agentx_behavior_contract() {{ :; }}
 trap 'printf "parent-exit\\n" >> {str(event_log)!r}' EXIT
 trap 'printf "parent-int\\n" >> {str(event_log)!r}; exit 130' INT
 trap 'printf "parent-term\\n" >> {str(event_log)!r}; exit 143' TERM

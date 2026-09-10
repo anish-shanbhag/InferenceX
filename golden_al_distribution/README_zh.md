@@ -93,6 +93,26 @@ python -m atom.entrypoints.openai_server \
 
 收集过程仅通过测量真实草稿头质量来建立黄金曲线。之后，AgentX 对所有可比较提交使用该已提交曲线作为合成接受目标。
 
+## 结构化 v1 companion
+
+[`v1/`](v1) 为本目录的每个旧 YAML 提供严格、带版本的 JSON companion。这些文档显式暴露模型与草稿身份、推测方法和 variant、逐模式采样与 chat-template 设置、收集溯源、审阅状态及全部接受长度点，因此工具无需解析文件名或注释。Wire schema、精确 resolver、digest 规则与消费者要求见 [`docs/benchmark-semantics_zh.md`](../docs/benchmark-semantics_zh.md)。
+
+迁移过程刻意保持无损与保守：它从旧 YAML 复制数值单元，身份信息只来自 [`utils/migrate_golden_curves.py`](../utils/migrate_golden_curves.py) 中的显式表。缺失的历史 checkpoint revision、image/artifact digest 与 template 身份仍保持 unknown。因此，所有迁移 companion 都是 `draft` 且 `review_status=pending`；工具可以发现它们，但必须显式使用 `--allow-draft`，它们目前也不是运行时权威。
+
+使用以下命令重新生成并校验 companion：
+
+```bash
+uv run --no-project --python 3.12 \
+  --with 'pydantic>=2' --with 'PyYAML>=6' --with 'rfc8785>=0.1.4' \
+  utils/migrate_golden_curves.py
+
+uv run --no-project --python 3.12 \
+  --with 'pydantic>=2' --with 'PyYAML>=6' --with 'rfc8785>=0.1.4' \
+  utils/benchmark_semantics.py validate golden_al_distribution/v1/*.json
+```
+
+不得使用可变 branch 名或推断值填补缺口并激活曲线。激活要求已批准，并具有完整、不可变的目标模型、草稿（使用外部 checkpoint 时）、dataset、image、保留 artifact、framework 与审阅溯源。
+
 ## 复现一次收集
 
 首先测试模型专用收集脚本和镜像，然后从包含该收集脚本的分支触发工作流：

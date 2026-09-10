@@ -93,6 +93,26 @@ The push-button [`speedbench-al.yml`](../.github/workflows/speedbench-al.yml) wo
 
 The collection measures real head quality only to establish the golden curve. AgentX then uses that committed curve as the synthetic acceptance target for every comparable submission.
 
+## Structured v1 companions
+
+[`v1/`](v1) contains strict, versioned JSON companions for every legacy YAML in this directory. These documents expose model and draft identity, speculative method and variant, mode-specific sampling and chat-template settings, collection provenance, review state, and every acceptance-length point without requiring filename or comment parsing. The wire schema, exact resolver, digest rules, and consumer requirements are documented in [`docs/benchmark-semantics.md`](../docs/benchmark-semantics.md).
+
+The migration is deliberately lossless and conservative: it copies numeric cells from the legacy YAML and supplies identity only from an explicit table in [`utils/migrate_golden_curves.py`](../utils/migrate_golden_curves.py). Missing historical checkpoint revisions, image/artifact digests, and template identity remain unknown. Consequently, all migrated companions are `draft` with `review_status=pending`; they are discoverable for tooling but require explicit `--allow-draft` and are not yet the runtime authority.
+
+Regenerate and validate the companions with:
+
+```bash
+uv run --no-project --python 3.12 \
+  --with 'pydantic>=2' --with 'PyYAML>=6' --with 'rfc8785>=0.1.4' \
+  utils/migrate_golden_curves.py
+
+uv run --no-project --python 3.12 \
+  --with 'pydantic>=2' --with 'PyYAML>=6' --with 'rfc8785>=0.1.4' \
+  utils/benchmark_semantics.py validate golden_al_distribution/v1/*.json
+```
+
+Do not activate a curve by filling gaps with mutable branch names or inferred values. Activation requires approval and complete immutable target, draft (when external), dataset, image, retained-artifact, framework, and review provenance.
+
 ## Reproducing a collection
 
 Test the model-specific collector and image first, then dispatch the workflow from the branch containing that collector:
