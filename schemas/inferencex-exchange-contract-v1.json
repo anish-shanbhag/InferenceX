@@ -260,7 +260,7 @@
         },
         "behavior_contract": {
           "oneOf": [
-            { "$ref": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/main/schemas/inferencex-benchmark-semantics-v1.json#/$defs/behaviorContract" },
+            { "$ref": "inferencex-benchmark-semantics-v1.json#/$defs/behaviorContract" },
             { "type": "null" }
           ]
         }
@@ -953,6 +953,7 @@
       "required": [
         "record_schema_version",
         "record_id",
+        "result_ordinal",
         "point_id",
         "publication",
         "identity",
@@ -970,6 +971,7 @@
       "properties": {
         "record_schema_version": { "const": "inferencex.result/v1" },
         "record_id": { "type": "string", "minLength": 1 },
+        "result_ordinal": { "$ref": "#/$defs/nonNegativeInteger" },
         "point_id": { "type": "string", "minLength": 1 },
         "publication": { "$ref": "#/$defs/publication" },
         "identity": { "$ref": "#/$defs/benchmarkIdentity" },
@@ -1074,7 +1076,7 @@
                   "duration_seconds": { "$ref": "#/$defs/positiveInteger" },
                   "dataset": { "$ref": "#/$defs/datasetIdentity" },
                   "behavior_contract": {
-                    "$ref": "https://raw.githubusercontent.com/SemiAnalysisAI/InferenceX/main/schemas/inferencex-benchmark-semantics-v1.json#/$defs/behaviorContract"
+                    "$ref": "inferencex-benchmark-semantics-v1.json#/$defs/behaviorContract"
                   }
                 }
               }
@@ -1138,6 +1140,8 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "plan_id",
+        "plan_fingerprint",
         "point_id",
         "matrix_fingerprint",
         "point_fingerprint",
@@ -1146,9 +1150,16 @@
         "job_name"
       ],
       "properties": {
-        "point_id": { "type": "string", "minLength": 1 },
+        "plan_id": { "type": "string", "minLength": 1 },
+        "plan_fingerprint": { "$ref": "#/$defs/digest" },
+        "point_id": { "type": ["string", "null"], "minLength": 1 },
         "matrix_fingerprint": { "$ref": "#/$defs/digest" },
-        "point_fingerprint": { "$ref": "#/$defs/digest" },
+        "point_fingerprint": {
+          "oneOf": [
+            { "$ref": "#/$defs/digest" },
+            { "type": "null" }
+          ]
+        },
         "resolved_matrix_entry": { "type": "object", "additionalProperties": true },
         "job_key": { "type": "string", "minLength": 1 },
         "job_name": { "type": "string", "minLength": 1 }
@@ -1158,19 +1169,23 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "plan_id",
         "point_id",
         "status",
         "job_id",
         "record_id",
+        "result_ordinal",
         "result_artifact",
         "job_manifest_artifact",
         "failure"
       ],
       "properties": {
-        "point_id": { "type": "string", "minLength": 1 },
-        "status": { "enum": ["queued", "in_progress", "success", "failed", "cancelled", "skipped", "reused"] },
+        "plan_id": { "type": "string", "minLength": 1 },
+        "point_id": { "type": ["string", "null"], "minLength": 1 },
+        "status": { "enum": ["queued", "in_progress", "success", "failed", "cancelled", "skipped", "reused", "unknown"] },
         "job_id": { "type": ["integer", "null"], "minimum": 1 },
         "record_id": { "type": ["string", "null"], "minLength": 1 },
+        "result_ordinal": { "type": ["integer", "null"], "minimum": 0 },
         "result_artifact": { "type": ["string", "null"], "minLength": 1 },
         "job_manifest_artifact": { "type": "string", "minLength": 1 },
         "failure": {
@@ -1234,7 +1249,8 @@
         "document_type",
         "schema_version",
         "generated_at",
-        "run",
+        "source_run",
+        "merge_run",
         "generation",
         "planned_points",
         "outcomes"
@@ -1243,7 +1259,8 @@
         "document_type": { "const": "inferencex.run-manifest" },
         "schema_version": { "const": "inferencex.exchange/v1" },
         "generated_at": { "type": "string", "format": "date-time" },
-        "run": { "$ref": "#/$defs/sourceRun" },
+        "source_run": { "$ref": "#/$defs/sourceRun" },
+        "merge_run": { "$ref": "#/$defs/sourceRun" },
         "generation": { "$ref": "#/$defs/generationReceipt" },
         "planned_points": {
           "type": "array",
