@@ -155,7 +155,9 @@ def test_multinode_aggregate_does_not_invent_decode_accelerators():
                             "latency": {"full_response_intvty": {"p90": 3}}},
         "behavior_contract": {
             "behavior_schema_version": "inferencex.behavior/v1", "contract_id": None,
-            "contract_digest": None, "status": "unknown", "benchmark_protocol": None,
+            "contract_digest": None,
+            "contract_digest_scope": "planned_behavior_excluding_contract_identity_and_runtime_verification",
+            "status": "unknown", "benchmark_protocol": None,
             "request": None, "speculative_decoding": None, "source": None, "extensions": {},
         },
     })
